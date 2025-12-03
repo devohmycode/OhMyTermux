@@ -2,10 +2,10 @@
 
 ![Banner1](assets/ohmytermux_15.png)
 
-### **De la sélection d'un shell à l'application d'un pack de curseurs afin de cliquer avec style dans les menus d'un environnement de développement Debian complet tenant dans votre poche : des dizaines de paramètres sont disponibles dans [OhMyTermux](https://github.com/GiGiDKR/OhMyTermux).**
+### **De la sélection d'un shell à l'application d'un pack de curseurs afin de cliquer avec style dans les menus d'un environnement de développement Debian complet tenant dans votre poche : des dizaines de paramètres sont disponibles dans [OhMyTermux](https://github.com/devohmycode/OhMyTermux).**
 
-![Version](https://img.shields.io/badge/version-1.1.0-magenta) ![GitHub last commit](https://img.shields.io/github/last-commit/GiGiDKR/OhMyTermux?style=flat&color=green&link=https%3A%2F%2Fgithub.com%2FGiGiDKR%2FOhMyTermux) ![GitHub repo file or directory count](https://img.shields.io/github/directory-file-count/GiGiDKR/OhMyTermux)  ![GitHub code size in bytes](https://img.shields.io/github/languages/code-size/GiGiDKR/OhMyTermux) ![GitHub repo size](https://img.shields.io/github/repo-size/GiGiDKR/OhMyTermux)
-![GitHub Repo stars](https://img.shields.io/github/stars/GiGiDKR/OhMyTermux?style=flat&color=gold) ![GitHub forks](https://img.shields.io/github/forks/GiGIDKR/OhMyTermux?style=flat&color=gold)
+![Version](https://img.shields.io/badge/version-1.1.0-magenta) ![GitHub last commit](https://img.shields.io/github/last-commit/devohmycode/OhMyTermux?style=flat&color=green&link=https%3A%2F%2Fgithub.com%2FGiGiDKR%2FOhMyTermux) ![GitHub repo file or directory count](https://img.shields.io/github/directory-file-count/devohmycode/OhMyTermux)  ![GitHub code size in bytes](https://img.shields.io/github/languages/code-size/devohmycode/OhMyTermux) ![GitHub repo size](https://img.shields.io/github/repo-size/devohmycode/OhMyTermux)
+![GitHub Repo stars](https://img.shields.io/github/stars/devohmycode/OhMyTermux?style=flat&color=gold) ![GitHub forks](https://img.shields.io/github/forks/devohmycode/OhMyTermux?style=flat&color=gold)
 
 
 ## Installation
@@ -14,7 +14,7 @@
 > 🚀 Dernière version de Termux : [v0.119.0-beta.2](https://github.com/termux/termux-app/releases/tag/v0.119.0-beta.2)
 2. Installez **OhMyTermux** avec **[Gum](https://github.com/charmbracelet/gum)** (**recommendé**🔥) :
 ```bash
-curl -sL https://raw.githubusercontent.com/GiGiDKR/OhMyTermux/1.1.0/install.sh -o install.sh && chmod +x install.sh && ./install.sh --gum --lang fr
+curl -sL https://raw.githubusercontent.com/devohmycode/OhMyTermux/main/install.sh -o install.sh && chmod +x install.sh && ./install.sh --gum --lang fr
 ```
 
 </details>
@@ -24,7 +24,7 @@ curl -sL https://raw.githubusercontent.com/GiGiDKR/OhMyTermux/1.1.0/install.sh -
 <summary>🧊 Méthode alternative</summary>
 
 ```bash
-curl -sL https://raw.githubusercontent.com/GiGiDKR/OhMyTermux/1.1.0/install.sh -o install.sh && chmod +x install.sh && ./install.sh --lang fr
+curl -sL https://raw.githubusercontent.com/devohmycode/OhMyTermux/main/install.sh -o install.sh && chmod +x install.sh && ./install.sh --lang fr
 ```
 </details>
 
@@ -336,7 +336,7 @@ Version 1.0.0 :
 - [ ] Ajouter plus de paquets sélectionnables
 - [ ] Ajouter des modules Python
 - [ ] Intégrer une sélection de thèmes Termux
-- [ ] Intégration de [OhMyTermuxScript](https://github.com/GiGiDKR/OhMyTermuxScript)
+- [ ] Intégration de [OhMyTermuxScript](https://github.com/devohmycode/OhMyTermuxScript)
 - [ ] Intégration de [OhMyObsidian](https://github.com/GiGiDKR/OhMyObsidian)
 
 > [!TIP]

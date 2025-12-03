@@ -2,10 +2,10 @@
 
 ![Banner1](assets/ohmytermux_15.png)
 
-### **From selecting a shell to applying a cursor pack to performing stylish clicks in a complete Debian development environment that fits in your pocket  : dozens of parameters are available in [OhMyTermux](https://github.com/GiGiDKR/OhMyTermux).**
+### **From selecting a shell to applying a cursor pack to performing stylish clicks in a complete Debian development environment that fits in your pocket  : dozens of parameters are available in [OhMyTermux](https://github.com/devohmycode/OhMyTermux).**
 
-![Version](https://img.shields.io/badge/version-1.1.0-magenta) ![GitHub last commit](https://img.shields.io/github/last-commit/GiGiDKR/OhMyTermux?style=flat&color=green&link=https%3A%2F%2Fgithub.com%2FGiGiDKR%2FOhMyTermux) ![GitHub repo file or directory count](https://img.shields.io/github/directory-file-count/GiGiDKR/OhMyTermux)  ![GitHub code size in bytes](https://img.shields.io/github/languages/code-size/GiGiDKR/OhMyTermux) ![GitHub repo size](https://img.shields.io/github/repo-size/GiGiDKR/OhMyTermux)
-![GitHub Repo stars](https://img.shields.io/github/stars/GiGiDKR/OhMyTermux?style=flat&color=gold) ![GitHub forks](https://img.shields.io/github/forks/GiGIDKR/OhMyTermux?style=flat&color=gold)
+![Version](https://img.shields.io/badge/version-1.1.0-magenta) ![GitHub last commit](https://img.shields.io/github/last-commit/devohmycode/OhMyTermux?style=flat&color=green&link=https%3A%2F%2Fgithub.com%2FGiGiDKR%2FOhMyTermux) ![GitHub repo file or directory count](https://img.shields.io/github/directory-file-count/devohmycode/OhMyTermux)  ![GitHub code size in bytes](https://img.shields.io/github/languages/code-size/devohmycode/OhMyTermux) ![GitHub repo size](https://img.shields.io/github/repo-size/devohmycode/OhMyTermux)
+![GitHub Repo stars](https://img.shields.io/github/stars/devohmycode/OhMyTermux?style=flat&color=gold) ![GitHub forks](https://img.shields.io/github/forks/devohmycode/OhMyTermux?style=flat&color=gold)
 
 ## Installation
 
@@ -13,7 +13,7 @@
 > 🚀 Latest version of Termux : [v0.119.0-beta.3](https://github.com/termux/termux-app/releases/tag/v0.119.0-beta.3)
 2. Install **OhMyTermux** with **[Gum](https://github.com/charmbracelet/gum)** (**recommended**🔥) :
 ```bash
-curl -sL https://raw.githubusercontent.com/GiGiDKR/OhMyTermux/1.1.0/install.sh -o install.sh && chmod +x install.sh && ./install.sh --gum
+curl -sL https://raw.githubusercontent.com/devohmycode/OhMyTermux/main/install.sh -o install.sh && chmod +x install.sh && ./install.sh --gum
 ```
 
 <details>
@@ -21,7 +21,7 @@ curl -sL https://raw.githubusercontent.com/GiGiDKR/OhMyTermux/1.1.0/install.sh -
 <summary>🧊 Alternative installation method</summary>
 
 ```bash
-curl -sL https://raw.githubusercontent.com/GiGiDKR/OhMyTermux/1.1.0/install.sh -o install.sh && chmod +x install.sh && ./install.sh
+curl -sL https://raw.githubusercontent.com/devohmycode/OhMyTermux/main/install.sh -o install.sh && chmod +x install.sh && ./install.sh
 ```
 
 </details>
@@ -334,7 +334,7 @@ Version 1.0.0 :
 - [ ] Add more selectable packages
 - [ ] Add Python modules
 - [ ] Integrate a Termux theme selection
-- [ ] Integration of [OhMyTermuxScript](https://github.com/GiGiDKR/OhMyTermuxScript)
+- [ ] Integration of [OhMyTermuxScript](https://github.com/devohmycode/OhMyTermuxScript)
 - [ ] Integration of [OhMyObsidian](https://github.com/GiGiDKR/OhMyObsidian)
 
 > [!TIP]
@@ -347,6 +347,6 @@ https://github.com/user-attachments/assets/ec49fc8d-bc69-4b95-ade4-5ca2ae57a105
 <a href="https://next.ossinsight.io/widgets/official/analyze-repo-stars-history?repo_id=847021315" target="_blank" style="display: block" align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="https://next.ossinsight.io/widgets/official/analyze-repo-stars-history/thumbnail.png?repo_id=847021315&image_size=auto&color_scheme=dark" width="721" height="auto">
-    <img alt="Star History of GiGiDKR/OhMyTermux" src="https://next.ossinsight.io/widgets/official/analyze-repo-stars-history/thumbnail.png?repo_id=847021315&image_size=auto&color_scheme=light" width="721" height="auto">
+    <img alt="Star History of devohmycode/OhMyTermux" src="https://next.ossinsight.io/widgets/official/analyze-repo-stars-history/thumbnail.png?repo_id=847021315&image_size=auto&color_scheme=light" width="721" height="auto">
   </picture>
 </a>
