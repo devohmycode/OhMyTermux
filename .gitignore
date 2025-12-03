@@ -1,0 +1,10 @@
+.vscode
+*.bak
+i18n/*.md
+template*
+tests/
+.kiro/
+.qoder/
+CLAUDE.md
+AGENTS.md
+banner/
