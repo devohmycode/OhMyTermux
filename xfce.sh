@@ -31,7 +31,7 @@ done
 
 # Function to download the i18n system if needed
 download_i18n_system() {
-    local BASE_URL="https://raw.githubusercontent.com/GiGiDKR/OhMyTermux/$BRANCH"
+    local BASE_URL="https://raw.githubusercontent.com/devohmycode/OhMyTermux/$BRANCH"
     local TEMP_I18N_DIR="$SCRIPT_DIR/i18n"
     local TEMP_MESSAGES_DIR="$TEMP_I18N_DIR/messages"
 
@@ -1138,7 +1138,7 @@ main() {
     fi
 
     # XFCE pre-configuration
-    download_file "https://github.com/GiGiDKR/OhMyTermux/raw/$BRANCH/src/config.zip" "XFCE configuration download"
+    download_file "https://github.com/devohmycode/OhMyTermux/raw/$BRANCH/src/config.zip" "XFCE configuration download"
     execute_command "unzip -o config.zip && \
                 rm config.zip" "XFCE configuration installation"
 

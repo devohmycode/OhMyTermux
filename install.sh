@@ -8,7 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Function to download the i18n system if needed
 download_i18n_system() {
-    local BASE_URL="https://raw.githubusercontent.com/GiGiDKR/OhMyTermux/$BRANCH"
+    local BASE_URL="https://raw.githubusercontent.com/devohmycode/OhMyTermux/$BRANCH"
     local TEMP_I18N_DIR="$SCRIPT_DIR/i18n"
     local TEMP_MESSAGES_DIR="$TEMP_I18N_DIR/messages"
 
@@ -927,7 +927,7 @@ install_shell() {
                     success_msg "$(t MSG_OHMYZSH_ALREADY_INSTALLED)"
                 fi
 
-                execute_command "curl -fLo \"$ZSHRC\" https://raw.githubusercontent.com/GiGiDKR/OhMyTermux/$BRANCH/src/zshrc" "$(t MSG_DEFAULT_CONFIG_PROGRESS)" || error_msg "$(t MSG_ERROR_DEFAULT_CONFIG)"
+                execute_command "curl -fLo \"$ZSHRC\" https://raw.githubusercontent.com/devohmycode/OhMyTermux/$BRANCH/src/zshrc" "$(t MSG_DEFAULT_CONFIG_PROGRESS)" || error_msg "$(t MSG_ERROR_DEFAULT_CONFIG)"
 
                 if command -v zsh &> /dev/null; then
                     install_zsh_plugins
@@ -1014,7 +1014,7 @@ install_prompt() {
                     sed -i 's/ZSH_THEME="robbyrussell"/ZSH_THEME="powerlevel10k\/powerlevel10k"/' "$ZSHRC"
 
                     if gum_confirm "$(t MSG_CONFIRM_INSTALL_CUSTOM_PROMPT)"; then
-                        execute_command "curl -fLo \"$HOME/.p10k.zsh\" https://raw.githubusercontent.com/GiGiDKR/OhMyTermux/$BRANCH/src/p10k.zsh" "$(t MSG_INSTALL_CUSTOM_PROMPT)" || error_msg "$(t MSG_ERROR_CUSTOM_PROMPT)"
+                        execute_command "curl -fLo \"$HOME/.p10k.zsh\" https://raw.githubusercontent.com/devohmycode/OhMyTermux/$BRANCH/src/p10k.zsh" "$(t MSG_INSTALL_CUSTOM_PROMPT)" || error_msg "$(t MSG_ERROR_CUSTOM_PROMPT)"
                         echo -e "\n$(t MSG_CUSTOM_PROMPT_COMMENT)" >> "$ZSHRC"
                         echo "[[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh" >> "$ZSHRC"
                     else
@@ -1035,7 +1035,7 @@ install_prompt() {
                     tput cuu1
                     tput el
                     if [[ "$CHOICE" =~ ^[oO]$ ]]; then
-                        execute_command "curl -fLo \"$HOME/.p10k.zsh\" https://raw.githubusercontent.com/GiGiDKR/OhMyTermux/$BRANCH/src/p10k.zsh" "$(t MSG_INSTALL_CUSTOM_PROMPT)" || error_msg "$(t MSG_ERROR_CUSTOM_PROMPT)"
+                        execute_command "curl -fLo \"$HOME/.p10k.zsh\" https://raw.githubusercontent.com/devohmycode/OhMyTermux/$BRANCH/src/p10k.zsh" "$(t MSG_INSTALL_CUSTOM_PROMPT)" || error_msg "$(t MSG_ERROR_CUSTOM_PROMPT)"
                         echo -e "\n$(t MSG_CUSTOM_PROMPT_COMMENT)" >> "$ZSHRC"
                         echo "[[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh" >> "$ZSHRC"
                     else
@@ -1736,9 +1736,9 @@ install_xfce() {
         done
 
         if $USE_GUM; then
-            download_and_execute "https://raw.githubusercontent.com/GiGiDKR/OhMyTermux/$BRANCH/xfce.sh" "XFCE" --gum --version="$XFCE_VERSION" --browser="$BROWSER_CHOICE"
+            download_and_execute "https://raw.githubusercontent.com/devohmycode/OhMyTermux/$BRANCH/xfce.sh" "XFCE" --gum --version="$XFCE_VERSION" --browser="$BROWSER_CHOICE"
         else
-            download_and_execute "https://raw.githubusercontent.com/GiGiDKR/OhMyTermux/$BRANCH/xfce.sh" "XFCE" --version="$XFCE_VERSION" --browser="$BROWSER_CHOICE"
+            download_and_execute "https://raw.githubusercontent.com/devohmycode/OhMyTermux/$BRANCH/xfce.sh" "XFCE" --version="$XFCE_VERSION" --browser="$BROWSER_CHOICE"
         fi
     fi
 }
@@ -1844,25 +1844,25 @@ install_proot() {
     if $PROOT_CHOICE; then
         title_msg "$(t MSG_CONFIG_PROOT)"
         
-        execute_command "curl -O https://raw.githubusercontent.com/GiGiDKR/OhMyTermux/$BRANCH/proot.sh" "$(t MSG_DOWNLOAD_PROOT_SCRIPT)" || error_msg "$(t MSG_ERROR_DOWNLOAD_PROOT)"
+        execute_command "curl -O https://raw.githubusercontent.com/devohmycode/OhMyTermux/$BRANCH/proot.sh" "$(t MSG_DOWNLOAD_PROOT_SCRIPT)" || error_msg "$(t MSG_ERROR_DOWNLOAD_PROOT)"
         execute_command "chmod +x proot.sh" "$(t MSG_EXECUTE_PROOT_SCRIPT)"
         
         # If the identifiers are already provided
         if [ -n "$PROOT_USERNAME" ] && [ -n "$PROOT_PASSWORD" ]; then
             if $USE_GUM; then
                 execute_command "pkg install proot-distro -y" "$(t MSG_INSTALL_PROOT_DISTRO)"
-                download_and_execute "https://raw.githubusercontent.com/GiGiDKR/OhMyTermux/$BRANCH/proot.sh" "PRoot" --gum --username="$PROOT_USERNAME" --password="$PROOT_PASSWORD"
+                download_and_execute "https://raw.githubusercontent.com/devohmycode/OhMyTermux/$BRANCH/proot.sh" "PRoot" --gum --username="$PROOT_USERNAME" --password="$PROOT_PASSWORD"
                 install_utils
             else
                 execute_command "pkg install proot-distro -y" "$(t MSG_INSTALL_PROOT_DISTRO)"
-                download_and_execute "https://raw.githubusercontent.com/GiGiDKR/OhMyTermux/$BRANCH/proot.sh" "PRoot" --username="$PROOT_USERNAME" --password="$PROOT_PASSWORD"
+                download_and_execute "https://raw.githubusercontent.com/devohmycode/OhMyTermux/$BRANCH/proot.sh" "PRoot" --username="$PROOT_USERNAME" --password="$PROOT_PASSWORD"
                 install_utils
             fi
         else
             if $USE_GUM; then
                 if gum_confirm "$(t MSG_CONFIRM_INSTALL_PROOT)"; then
                     execute_command "pkg install proot-distro -y" "$(t MSG_INSTALL_PROOT_DISTRO)"
-                    download_and_execute "https://raw.githubusercontent.com/GiGiDKR/OhMyTermux/$BRANCH/proot.sh" "PRoot" --gum
+                    download_and_execute "https://raw.githubusercontent.com/devohmycode/OhMyTermux/$BRANCH/proot.sh" "PRoot" --gum
                     install_utils
                 fi
             else    
@@ -1899,7 +1899,7 @@ get_username() {
 #------------------------------------------------------------------------------
 install_utils() {
     title_msg "$(t MSG_CONFIG_UTILS)"
-    download_and_execute "https://raw.githubusercontent.com/GiGiDKR/OhMyTermux/$BRANCH/utils.sh" "Utils"
+    download_and_execute "https://raw.githubusercontent.com/devohmycode/OhMyTermux/$BRANCH/utils.sh" "Utils"
 
     if ! USERNAME=$(get_username); then
         error_msg "$(t MSG_ERROR_GET_USERNAME)"

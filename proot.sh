@@ -46,7 +46,7 @@ done
 
 # Function to download the i18n system if necessary
 download_i18n_system() {
-    local BASE_URL="https://raw.githubusercontent.com/GiGiDKR/OhMyTermux/$BRANCH"
+    local BASE_URL="https://raw.githubusercontent.com/devohmycode/OhMyTermux/$BRANCH"
     local TEMP_I18N_DIR="$SCRIPT_DIR/i18n"
     local TEMP_MESSAGES_DIR="$TEMP_I18N_DIR/messages"
 
@@ -398,7 +398,7 @@ configure_user_rights() {
 #------------------------------------------------------------------------------
 install_mesa_vulkan() {
     local MESA_PACKAGE="mesa-vulkan-kgsl_24.1.0-devel-20240120_arm64.deb"
-    local MESA_URL="https://github.com/GiGiDKR/OhMyTermux/raw/$BRANCH/src/$MESA_PACKAGE"
+    local MESA_URL="https://github.com/devohmycode/OhMyTermux/raw/$BRANCH/src/$MESA_PACKAGE"
 
     if ! proot-distro login debian --shared-tmp -- env DISPLAY=:1.0 dpkg -s mesa-vulkan-kgsl &> /dev/null; then
         execute_command "proot-distro login debian --shared-tmp -- env DISPLAY=:1.0 wget $MESA_URL" "$(t "MSG_PROOT_MESA_DOWNLOAD")"
