@@ -49,7 +49,7 @@ else
     echo "Initializing i18n system..." >&2
     # Temporarily set BRANCH if not already set
     if [ -z "$BRANCH" ]; then
-        BRANCH="1.1.0"
+        BRANCH="main"
     fi
     # Download the i18n system
     if download_i18n_system; then
@@ -68,7 +68,7 @@ fi
 # GLOBAL VARIABLES
 #------------------------------------------------------------------------------
 # GitHub branch for downloads
-BRANCH="1.1.0"
+BRANCH="main"
 
 # Interactive interface with gum
 USE_GUM=false

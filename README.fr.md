@@ -14,7 +14,7 @@
 > 🚀 Dernière version de Termux : [v0.119.0-beta.2](https://github.com/termux/termux-app/releases/tag/v0.119.0-beta.2)
 2. Installez **OhMyTermux** avec **[Gum](https://github.com/charmbracelet/gum)** (**recommendé**🔥) :
 ```bash
-curl -sL https://raw.githubusercontent.com/GiGiDKR/OhMyTermux/1.1.0/install.sh -o install.sh && chmod +x install.sh && ./install.sh --gum --lang fr
+curl -sL https://raw.githubusercontent.com/devohmycode/OhMyTermux/main/install.sh -o install.sh && chmod +x install.sh && ./install.sh --gum --lang fr
 ```
 
 </details>
@@ -24,7 +24,7 @@ curl -sL https://raw.githubusercontent.com/GiGiDKR/OhMyTermux/1.1.0/install.sh -
 <summary>🧊 Méthode alternative</summary>
 
 ```bash
-curl -sL https://raw.githubusercontent.com/GiGiDKR/OhMyTermux/1.1.0/install.sh -o install.sh && chmod +x install.sh && ./install.sh --lang fr
+curl -sL https://raw.githubusercontent.com/devohmycode/OhMyTermux/main/install.sh -o install.sh && chmod +x install.sh && ./install.sh --lang fr
 ```
 </details>
 
