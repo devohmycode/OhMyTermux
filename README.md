@@ -339,14 +339,3 @@ Version 1.0.0 :
 
 > [!TIP]
 > 🚩 French version is [available](README.fr.md).
-
-## A short overview :
-
-https://github.com/user-attachments/assets/ec49fc8d-bc69-4b95-ade4-5ca2ae57a105
-
-<a href="https://next.ossinsight.io/widgets/official/analyze-repo-stars-history?repo_id=847021315" target="_blank" style="display: block" align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://next.ossinsight.io/widgets/official/analyze-repo-stars-history/thumbnail.png?repo_id=847021315&image_size=auto&color_scheme=dark" width="721" height="auto">
-    <img alt="Star History of devohmycode/OhMyTermux" src="https://next.ossinsight.io/widgets/official/analyze-repo-stars-history/thumbnail.png?repo_id=847021315&image_size=auto&color_scheme=light" width="721" height="auto">
-  </picture>
-</a>
