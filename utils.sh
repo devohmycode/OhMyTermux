@@ -30,16 +30,22 @@ for ARG in "$@"; do
 done
 
 # Bootstrap: download i18n system if needed
-if [ ! -f "$SCRIPT_DIR/lib/bootstrap.sh" ]; then
-    mkdir -p "$SCRIPT_DIR/lib"
-    curl -L -s -o "$SCRIPT_DIR/lib/bootstrap.sh" \
-        "https://raw.githubusercontent.com/devohmycode/OhMyTermux/${BRANCH:-main}/lib/bootstrap.sh" 2>/dev/null
+_bootstrap_url="https://raw.githubusercontent.com/devohmycode/OhMyTermux/$BRANCH/lib/bootstrap.sh"
+_validate_script() { head -1 "$1" 2>/dev/null | grep -q "^#!/bin/bash"; }
+
+mkdir -p "$SCRIPT_DIR/lib"
+if [ ! -f "$SCRIPT_DIR/lib/bootstrap.sh" ] || ! _validate_script "$SCRIPT_DIR/lib/bootstrap.sh"; then
+    curl -fL -s -o "$SCRIPT_DIR/lib/bootstrap.sh" "$_bootstrap_url" 2>/dev/null
 fi
-source "$SCRIPT_DIR/lib/bootstrap.sh"
-[ ! -f "$SCRIPT_DIR/i18n/i18n.sh" ] && download_i18n_system
+if _validate_script "$SCRIPT_DIR/lib/bootstrap.sh"; then
+    source "$SCRIPT_DIR/lib/bootstrap.sh"
+    if [ ! -f "$SCRIPT_DIR/i18n/i18n.sh" ] || ! _validate_script "$SCRIPT_DIR/i18n/i18n.sh"; then
+        download_i18n_system
+    fi
+fi
 
 # Load the internationalization system
-if [ -f "$SCRIPT_DIR/i18n/i18n.sh" ]; then
+if [ -f "$SCRIPT_DIR/i18n/i18n.sh" ] && _validate_script "$SCRIPT_DIR/i18n/i18n.sh"; then
     source "$SCRIPT_DIR/i18n/i18n.sh"
     init_i18n "$OVERRIDE_LANG"
 else

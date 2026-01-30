@@ -47,22 +47,23 @@ done
 #------------------------------------------------------------------------------
 # BOOTSTRAP - Load i18n and lib systems
 #------------------------------------------------------------------------------
-if [ ! -f "$SCRIPT_DIR/lib/bootstrap.sh" ]; then
-    mkdir -p "$SCRIPT_DIR/lib"
-    curl -L -s -o "$SCRIPT_DIR/lib/bootstrap.sh" \
-        "https://raw.githubusercontent.com/devohmycode/OhMyTermux/$BRANCH/lib/bootstrap.sh" 2>/dev/null
+_bootstrap_url="https://raw.githubusercontent.com/devohmycode/OhMyTermux/$BRANCH/lib/bootstrap.sh"
+_validate_script() { head -1 "$1" 2>/dev/null | grep -q "^#!/bin/bash"; }
+
+mkdir -p "$SCRIPT_DIR/lib"
+if [ ! -f "$SCRIPT_DIR/lib/bootstrap.sh" ] || ! _validate_script "$SCRIPT_DIR/lib/bootstrap.sh"; then
+    curl -fL -s -o "$SCRIPT_DIR/lib/bootstrap.sh" "$_bootstrap_url" 2>/dev/null
+    if ! _validate_script "$SCRIPT_DIR/lib/bootstrap.sh"; then
+        echo "Error: Failed to download bootstrap.sh from $_bootstrap_url" >&2
+        exit 1
+    fi
 fi
 source "$SCRIPT_DIR/lib/bootstrap.sh"
 
 # Download and load i18n
-if [ -f "$SCRIPT_DIR/i18n/i18n.sh" ]; then
-    source "$SCRIPT_DIR/i18n/i18n.sh"
-    init_i18n "$OVERRIDE_LANG"
-else
+if [ ! -f "$SCRIPT_DIR/i18n/i18n.sh" ] || ! _validate_script "$SCRIPT_DIR/i18n/i18n.sh"; then
     echo "Initializing i18n system..." >&2
-    if download_i18n_system; then
-        source "$SCRIPT_DIR/i18n/i18n.sh"
-        init_i18n "$OVERRIDE_LANG"
+    if download_i18n_system && _validate_script "$SCRIPT_DIR/i18n/i18n.sh"; then
         echo "i18n system downloaded and loaded successfully." >&2
     else
         echo "Error: Could not download i18n system. Using fallback messages." >&2
@@ -71,9 +72,11 @@ else
         MESSAGES_LOADED="fallback"
     fi
 fi
+[ -f "$SCRIPT_DIR/i18n/i18n.sh" ] && _validate_script "$SCRIPT_DIR/i18n/i18n.sh" && source "$SCRIPT_DIR/i18n/i18n.sh"
+type init_i18n &>/dev/null && init_i18n "$OVERRIDE_LANG"
 
 # Download and load lib
-if [ ! -f "$SCRIPT_DIR/lib/common.sh" ]; then
+if [ ! -f "$SCRIPT_DIR/lib/common.sh" ] || ! _validate_script "$SCRIPT_DIR/lib/common.sh"; then
     download_lib_system
 fi
 source "$SCRIPT_DIR/lib/common.sh"

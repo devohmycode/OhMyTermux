@@ -24,7 +24,7 @@ _download_files() {
 
         mkdir -p "$LOCAL_DIR"
 
-        if ! curl -L -s -o "$LOCAL_PATH" "$URL" 2>/dev/null; then
+        if ! curl -fL -s -o "$LOCAL_PATH" "$URL" 2>/dev/null; then
             echo "Warning: Could not download $FILE from $URL" >&2
             return 1
         fi
