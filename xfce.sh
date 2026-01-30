@@ -182,7 +182,7 @@ for arg in "$@"; do
             ;;
         --full)
             FULL_INSTALL=true
-            XFCE_VERSION="recommandée"
+            XFCE_VERSION="recommended"
             BROWSER_CHOICE="chromium"
             INSTALL_THEME=true
             INSTALL_ICONS=true
@@ -547,7 +547,7 @@ EOF
     fi
 
     case "$INSTALL_TYPE" in
-        "recommandée")
+        "recommended")
             # Complete configuration with all elements
             cat > "$CONFIG_DIR/xsettings.xml" << EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -573,7 +573,7 @@ EOF
 EOF
             ;;
 
-        "minimale"|"personnalisée")
+        "minimal"|"customized")
             # Base configuration
             local THEME_VALUE="Default"
             local ICON_VALUE="Adwaita"
@@ -1129,7 +1129,7 @@ main() {
     fi
 
     # XFCE elements installation
-    if [ "$INSTALL_TYPE" != "minimale" ]; then
+    if [ "$INSTALL_TYPE" != "minimal" ]; then
         subtitle_msg "❯ XFCE elements installation"
         [ "$INSTALL_THEME" = true ] && install_themes
         [ "$INSTALL_ICONS" = true ] && install_icons

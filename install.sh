@@ -171,8 +171,8 @@ show_help() {
 #------------------------------------------------------------------------------
 # ARGUMENTS MANAGEMENT
 #------------------------------------------------------------------------------
-for ARG in "$@"; do
-    case $ARG in
+while [[ $# -gt 0 ]]; do
+    case $1 in
         --gum|-g)
             USE_GUM=true
             shift
@@ -249,14 +249,13 @@ for ARG in "$@"; do
         *)
             # Get the username and password if provided
             if [ -z "$PROOT_USERNAME" ]; then
-                PROOT_USERNAME="$ARG"
-                shift
+                PROOT_USERNAME="$1"
             elif [ -z "$PROOT_PASSWORD" ]; then
-                PROOT_PASSWORD="$ARG"
-                shift
+                PROOT_PASSWORD="$1"
             else
                 break
             fi
+            shift
             ;;
     esac
 done
@@ -1659,20 +1658,20 @@ install_font() {
 install_xfce() {
     if $XFCE_CHOICE; then
         title_msg "$(t MSG_CONFIG_XFCE)"
-        local XFCE_VERSION="recommanded"
+        local XFCE_VERSION="recommended"
         local BROWSER_CHOICE="chromium"
 
         if ! $FULL_INSTALL; then
             if $USE_GUM; then
                 if gum_confirm "$(t MSG_CONFIRM_INSTALL_XFCE)"; then
                     # Choice of the version
-                    XFCE_VERSION=$(gum_choose "$(t MSG_SELECT_XFCE_VERSION)" --height=5 --selected="recommanded" \
+                    XFCE_VERSION=$(gum_choose "$(t MSG_SELECT_XFCE_VERSION)" --height=5 --selected="recommended" \
                     "minimal" \
-                    "recommanded" \
+                    "recommended" \
                     "customized")
 
                     # Sélection du navigateur (sauf pour la version minimale)
-                    if [ "$XFCE_VERSION" != "minimale" ]; then
+                    if [ "$XFCE_VERSION" != "minimal" ]; then
                         BROWSER_CHOICE=$(gum_choose "$(t MSG_SELECT_BROWSER)" --height=5 --selected="chromium" "chromium" "firefox" "none")
                     fi
                 else
@@ -1695,10 +1694,10 @@ install_xfce() {
                     tput cuu 7
                     tput ed
                     case $CHOICE in
-                        1) XFCE_VERSION="minimale" ;;
-                        2) XFCE_VERSION="recommanded" ;;
+                        1) XFCE_VERSION="minimal" ;;
+                        2) XFCE_VERSION="recommended" ;;
                         3) XFCE_VERSION="customized" ;;
-                        *) XFCE_VERSION="recommanded" ;;
+                        *) XFCE_VERSION="recommended" ;;
                     esac
 
                     if [ "$XFCE_VERSION" != "minimal" ]; then
