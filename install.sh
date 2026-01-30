@@ -10,7 +10,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # GLOBAL VARIABLES
 #------------------------------------------------------------------------------
 # GitHub branch for downloads
-BRANCH="main"
+BRANCH="1.1.02"
 
 # Interactive interface with gum
 USE_GUM=false
