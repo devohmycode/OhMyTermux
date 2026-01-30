@@ -44,83 +44,43 @@ for ARG in "$@"; do
     esac
 done
 
-# Function to download the i18n system if necessary
-download_i18n_system() {
-    local BASE_URL="https://raw.githubusercontent.com/devohmycode/OhMyTermux/$BRANCH"
-    local TEMP_I18N_DIR="$SCRIPT_DIR/i18n"
-    local TEMP_MESSAGES_DIR="$TEMP_I18N_DIR/messages"
+#------------------------------------------------------------------------------
+# BOOTSTRAP - Load i18n and lib systems
+#------------------------------------------------------------------------------
+if [ ! -f "$SCRIPT_DIR/lib/bootstrap.sh" ]; then
+    mkdir -p "$SCRIPT_DIR/lib"
+    curl -L -s -o "$SCRIPT_DIR/lib/bootstrap.sh" \
+        "https://raw.githubusercontent.com/devohmycode/OhMyTermux/$BRANCH/lib/bootstrap.sh" 2>/dev/null
+fi
+source "$SCRIPT_DIR/lib/bootstrap.sh"
 
-    # Create temporary directories
-    mkdir -p "$TEMP_MESSAGES_DIR"
-
-    # List of i18n files to download
-    local I18N_FILES=(
-        "i18n/i18n.sh"
-        "i18n/locale_detect.sh"
-        "i18n/messages/en.sh"
-        "i18n/messages/fr.sh"
-    )
-
-    # Download each file
-    for FILE in "${I18N_FILES[@]}"; do
-        local URL="$BASE_URL/$FILE"
-        local LOCAL_PATH="$SCRIPT_DIR/$FILE"
-        local LOCAL_DIR=$(dirname "$LOCAL_PATH")
-
-        # Create the directory if necessary
-        mkdir -p "$LOCAL_DIR"
-
-        # Download the file
-        if ! curl -L -s -o "$LOCAL_PATH" "$URL" 2>/dev/null; then
-            echo "Warning: Could not download $FILE from $URL" >&2
-            return 1
-        fi
-    done
-
-    return 0
-}
-
+# Download and load i18n
 if [ -f "$SCRIPT_DIR/i18n/i18n.sh" ]; then
     source "$SCRIPT_DIR/i18n/i18n.sh"
     init_i18n "$OVERRIDE_LANG"
 else
     echo "Initializing i18n system..." >&2
-    # Temporarily set BRANCH if not already set
-    if [ -z "$BRANCH" ]; then
-        BRANCH="main"
-    fi
-    # Download the i18n system
     if download_i18n_system; then
         source "$SCRIPT_DIR/i18n/i18n.sh"
         init_i18n "$OVERRIDE_LANG"
         echo "i18n system downloaded and loaded successfully." >&2
     else
         echo "Error: Could not download i18n system. Using fallback messages." >&2
-        # Define basic fallback functions
         t() { echo "$1"; }
         init_i18n() { return 0; }
         MESSAGES_LOADED="fallback"
     fi
 fi
 
-
-#------------------------------------------------------------------------------
-# DISPLAY COLORS
-#------------------------------------------------------------------------------
-COLOR_BLUE='\033[38;5;33m'    # Information
-COLOR_GREEN='\033[38;5;82m'   # Success
-COLOR_GOLD='\033[38;5;220m'   # Warning
-COLOR_RED='\033[38;5;196m'    # Error
-COLOR_RESET='\033[0m'         # Reset
-
-#------------------------------------------------------------------------------
-# REDIRECTION
-#------------------------------------------------------------------------------
-if [ "$VERBOSE" = false ]; then
-    REDIRECT=">/dev/null 2>&1"
-else
-    REDIRECT=""
+# Download and load lib
+if [ ! -f "$SCRIPT_DIR/lib/common.sh" ]; then
+    download_lib_system
 fi
+source "$SCRIPT_DIR/lib/common.sh"
+
+# Configure error handler keys for this script
+ERROR_MSG_KEY="MSG_PROOT_ERROR_INSTALL"
+ERROR_REFER_KEY="MSG_PROOT_ERROR_REFER"
 
 #------------------------------------------------------------------------------
 # DISPLAY HELP
@@ -128,7 +88,7 @@ fi
 show_help() {
     clear
     echo "$(t "MSG_PROOT_HELP_TITLE")"
-    echo 
+    echo
     echo "$(t "MSG_PROOT_HELP_USAGE")"
     echo "$(t "MSG_PROOT_HELP_OPTIONS")"
     echo "  --gum | -g     $(t "MSG_PROOT_HELP_GUM")"
@@ -176,110 +136,6 @@ for ARG in "$@"; do
 done
 
 #------------------------------------------------------------------------------
-# INFORMATION MESSAGES
-#------------------------------------------------------------------------------
-info_msg() {
-    if $USE_GUM; then
-        gum style "${1//$'\n'/ }" --foreground 33
-    else
-        echo -e "${COLOR_BLUE}$1${COLOR_RESET}"
-    fi
-}
-
-#------------------------------------------------------------------------------
-# SUCCESS MESSAGES
-#------------------------------------------------------------------------------
-success_msg() {
-    if $USE_GUM; then
-        gum style "${1//$'\n'/ }" --foreground 82
-    else
-        echo -e "${COLOR_GREEN}$1${COLOR_RESET}"
-    fi
-}
-
-#------------------------------------------------------------------------------
-# ERROR MESSAGES
-#------------------------------------------------------------------------------
-error_msg() {
-    if $USE_GUM; then
-        gum style "${1//$'\n'/ }" --foreground 196
-    else
-        echo -e "${COLOR_RED}$1${COLOR_RESET}"
-    fi
-}
-
-#------------------------------------------------------------------------------
-# TITLE MESSAGES
-#------------------------------------------------------------------------------
-title_msg() {
-    if $USE_GUM; then
-        gum style "${1//$'\n'/ }" --foreground 220 --bold
-    else
-        echo -e "\n${COLOR_GOLD}\033[1m$1\033[0m${COLOR_RESET}"
-    fi
-}
-
-#------------------------------------------------------------------------------
-# SUBTITLE MESSAGES
-#------------------------------------------------------------------------------
-subtitle_msg() {
-    if $USE_GUM; then
-        gum style "${1//$'\n'/ }" --foreground 33 --bold
-    else
-        echo -e "\n${COLOR_BLUE}\033[1m$1\033[0m${COLOR_RESET}"
-    fi
-}
-
-#------------------------------------------------------------------------------
-# ERROR LOGGING
-#------------------------------------------------------------------------------
-log_error() {
-    local ERROR_MSG="$1"
-    local USERNAME=$(whoami)
-    local HOSTNAME=$(hostname)
-    local CWD=$(pwd)
-    echo "[$(date +'%d/%m/%Y %H:%M:%S')] ERROR: $ERROR_MSG | User: $USERNAME | Machine: $HOSTNAME | Directory: $CWD" >> "$HOME/.config/OhMyTermux/install.log"
-}
-
-#------------------------------------------------------------------------------
-# DYNAMIC DISPLAY OF COMMAND RESULTS
-#------------------------------------------------------------------------------
-execute_command() {
-    local COMMAND="$1"
-    local INFO_MSG="$2"
-    local SUCCESS_MSG="✓ $INFO_MSG"
-    local ERROR_MSG="✗ $INFO_MSG"
-    local ERROR_DETAILS
-
-    if $USE_GUM; then
-        if gum spin --spinner.foreground="33" --title.foreground="33" --spinner dot --title "$INFO_MSG" -- bash -c "$COMMAND $REDIRECT"; then
-            gum style "$SUCCESS_MSG" --foreground 82
-        else
-            ERROR_DETAILS="Command: $COMMAND, Redirect: $REDIRECT, Time: $(date +'%d/%m/%Y %H:%M:%S')"
-            gum style "$ERROR_MSG" --foreground 196
-            log_error "$ERROR_DETAILS"
-            return 1
-        fi
-    else
-        tput sc
-        info_msg "$INFO_MSG"
-        
-        if eval "$COMMAND $REDIRECT"; then
-            tput rc
-            tput el
-            success_msg "$SUCCESS_MSG"
-        else
-            tput rc
-            tput el
-            ERROR_DETAILS="Command: $COMMAND, Redirect: $REDIRECT, Time: $(date +'%d/%m/%Y %H:%M:%S')"
-            error_msg "$ERROR_MSG"
-            log_error "$ERROR_DETAILS"
-            return 1
-        fi
-    fi
-}
-
-#------------------------------------------------------------------------------
 # DEPENDENCIES CHECK
 #------------------------------------------------------------------------------
 check_dependencies() {
@@ -293,57 +149,6 @@ check_dependencies() {
     if ! command -v proot-distro &> /dev/null; then
         error_msg "Please install proot-distro before continuing."
         exit 1
-    fi
-}
-
-#------------------------------------------------------------------------------
-# TEXT BANNER
-#------------------------------------------------------------------------------
-bash_banner() {
-    clear
-    local BANNER="
-╔════════════════════════════════════════╗
-║                                        ║
-║               OHMYTERMUX               ║
-║                                        ║
-╚════════════════════════════════════════╝"
-
-    echo -e "${COLOR_BLUE}${BANNER}${COLOR_RESET}\n"
-}
-
-
-#------------------------------------------------------------------------------
-# GRAPHIC BANNER
-#------------------------------------------------------------------------------
-show_banner() {
-    clear
-    if $USE_GUM; then
-        gum style \
-            --foreground 33 \
-            --border-foreground 33 \
-            --border double \
-            --align center \
-            --width 42 \
-            --margin "1 1 1 0" \
-            "" "OHMYTERMUX" ""
-    else
-        bash_banner
-    fi
-}
-
-#------------------------------------------------------------------------------
-# ERROR MANAGEMENT
-#------------------------------------------------------------------------------
-finish() {
-    local RET=$?
-    if [ ${RET} -ne 0 ] && [ ${RET} -ne 130 ]; then
-        echo
-        if [ "$USE_GUM" = true ]; then
-            gum style --foreground 196 "$(t "MSG_PROOT_ERROR_INSTALL")"
-        else
-            echo -e "${COLOR_RED}$(t "MSG_PROOT_ERROR_INSTALL")${COLOR_RESET}"
-        fi
-        echo -e "${COLOR_BLUE}$(t "MSG_PROOT_ERROR_REFER")${COLOR_RESET}"
     fi
 }
 
@@ -414,7 +219,7 @@ install_mesa_vulkan() {
 copy_theme() {
     local theme_name="$1"
     local theme_path=""
-    
+
     case $theme_name in
         "WhiteSur")
             theme_path="WhiteSur-Dark"
@@ -436,7 +241,7 @@ copy_theme() {
 copy_icons() {
     local icon_theme="$1"
     local icon_path=""
-    
+
     case $icon_theme in
         "WhiteSur")
             icon_path="WhiteSur-dark"
@@ -454,7 +259,7 @@ copy_icons() {
             icon_path="Qogir-dark"
             ;;
     esac
-    
+
     execute_command "cp -r $PREFIX/share/icons/$icon_path $PREFIX/var/lib/proot-distro/installed-rootfs/debian/usr/share/icons/" "$(t "MSG_PROOT_ICONS_CONFIGURATION")"
 }
 
@@ -537,7 +342,7 @@ if [ $# -eq 0 ] && [ -z "$PROOT_USERNAME" ] && [ -z "$PROOT_PASSWORD" ]; then
             echo -e "${COLOR_BLUE}$(t "MSG_PROOT_CONFIRM_PASSWORD")${COLOR_RESET}"
             read -rs PASSWORD_CONFIRM
             tput cuu1
-            tput el 
+            tput el
             if [ "$PROOT_PASSWORD" = "$PASSWORD_CONFIRM" ]; then
                 break
             else

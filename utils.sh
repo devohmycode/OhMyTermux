@@ -26,12 +26,20 @@ for ARG in "$@"; do
     esac
 done
 
+# Bootstrap: download i18n system if needed
+if [ ! -f "$SCRIPT_DIR/lib/bootstrap.sh" ]; then
+    mkdir -p "$SCRIPT_DIR/lib"
+    curl -L -s -o "$SCRIPT_DIR/lib/bootstrap.sh" \
+        "https://raw.githubusercontent.com/devohmycode/OhMyTermux/${BRANCH:-main}/lib/bootstrap.sh" 2>/dev/null
+fi
+source "$SCRIPT_DIR/lib/bootstrap.sh"
+[ ! -f "$SCRIPT_DIR/i18n/i18n.sh" ] && download_i18n_system
+
 # Load the internationalization system
 if [ -f "$SCRIPT_DIR/i18n/i18n.sh" ]; then
     source "$SCRIPT_DIR/i18n/i18n.sh"
     init_i18n "$OVERRIDE_LANG"
 else
-    # Fallback for messages if i18n is not available
     t() { echo "$1"; }
 fi
 
