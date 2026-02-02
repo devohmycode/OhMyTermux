@@ -206,11 +206,11 @@ configure_user_rights() {
 #------------------------------------------------------------------------------
 install_mesa_vulkan() {
     local MESA_PACKAGE="mesa-vulkan-kgsl_24.1.0-devel-20240120_arm64.deb"
-    local MESA_URL="https://github.com/devohmycode/OhMyTermux/raw/$BRANCH/src/$MESA_PACKAGE"
+    local MESA_URL="https://raw.githubusercontent.com/devohmycode/OhMyTermux/$BRANCH/src/$MESA_PACKAGE"
 
-    if ! proot-distro login debian --shared-tmp -- env DISPLAY=:1.0 dpkg -s mesa-vulkan-kgsl &> /dev/null; then
-        execute_command "proot-distro login debian --shared-tmp -- env DISPLAY=:1.0 wget -q -O /tmp/$MESA_PACKAGE $MESA_URL" "$(t "MSG_PROOT_MESA_DOWNLOAD")"
-        execute_command "proot-distro login debian --shared-tmp -- env DISPLAY=:1.0 sudo apt install -y /tmp/$MESA_PACKAGE" "$(t "MSG_PROOT_MESA_INSTALLATION")"
+    if ! proot-distro login debian --shared-tmp -- dpkg -s mesa-vulkan-kgsl &> /dev/null; then
+        execute_command "curl -fL -o $PREFIX/tmp/$MESA_PACKAGE $MESA_URL" "$(t "MSG_PROOT_MESA_DOWNLOAD")"
+        execute_command "proot-distro login debian --shared-tmp -- apt install -y /tmp/$MESA_PACKAGE" "$(t "MSG_PROOT_MESA_INSTALLATION")"
     else
         info_msg "$(t "MSG_PROOT_MESA_ALREADY_INSTALLED")"
     fi
