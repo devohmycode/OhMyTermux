@@ -547,6 +547,9 @@ install_wallpapers() {
                         ./install-wallpapers.sh && \
                         cd .. && \
                         rm -rf WhiteSur-wallpapers-2023-06-11 $ARCHIVE" "Install wallpapers"
+        execute_command "mkdir -p $PREFIX/share/backgrounds/whitesur && \
+                        cp -r $HOME/.local/share/backgrounds/*.jpg $PREFIX/share/backgrounds/whitesur/ && \
+                        cp -r $HOME/.local/share/backgrounds/*.png $PREFIX/share/backgrounds/whitesur/ 2>/dev/null; true" "Configure wallpapers"
     fi
 }
 

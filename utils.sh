@@ -170,8 +170,9 @@ APP_DESKTOP_FILE="$DESKTOP_DIR/app-installer.desktop"
 
 # Check the existence of the directory
 if [ ! -d "$INSTALLER_DIR" ]; then
-    # The directory does not exist, clone the repository
-    git clone "$REPO_URL" "$INSTALLER_DIR" > /dev/null 2>&1
+    # TODO: Repository currently unavailable, re-enable when migrated
+    # git clone "$REPO_URL" "$INSTALLER_DIR" > /dev/null 2>&1
+    echo "App Installer repository not available yet." > /dev/null 2>&1
 else
     "$INSTALLER_DIR/app-installer"
 fi
@@ -199,7 +200,8 @@ chmod +x "$INSTALLER_DIR/app-installer"
 
 EOF
 chmod +x "$PREFIX/bin/app-installer"
-bash $PREFIX/bin/app-installer > /dev/null 2>&1
+# TODO: Disabled until OhMyAppInstaller repository is migrated
+# bash $PREFIX/bin/app-installer > /dev/null 2>&1
 
 # Create the shortcut
 if [ ! -f "$HOME/Desktop/app-installer.desktop" ]; then
