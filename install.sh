@@ -537,7 +537,7 @@ color13=#9a5feb
 color14=#67fff0
 color15=#ffffff
 EOL
-        success_msg "✓ Argonaut theme installed"
+        success_msg "$(t MSG_SUCCESS_ARGONAUT)"
     fi
 
     # Common alias configuration
