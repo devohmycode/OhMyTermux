@@ -334,8 +334,6 @@ Version 1.0.0 :
 - [ ] Add more selectable packages
 - [ ] Add Python modules
 - [ ] Integrate a Termux theme selection
-- [ ] Integration of [OhMyTermuxScript](https://github.com/devohmycode/OhMyTermuxScript)
-- [ ] Integration of [OhMyObsidian](https://github.com/GiGiDKR/OhMyObsidian)
 
 > [!TIP]
 > 🚩 French version is [available](README.fr.md).
