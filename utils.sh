@@ -9,11 +9,8 @@ BRANCH="${BRANCH:-1.1.02}"
 # Language override variable
 OVERRIDE_LANG=""
 
-# Selected distribution for PRoot
-SELECTED_DISTRO="debian"
-
 #------------------------------------------------------------------------------
-# PRELIMINARY ARGUMENT PARSING FOR LANGUAGE AND DISTRO
+# PRELIMINARY ARGUMENT PARSING FOR LANGUAGE
 #------------------------------------------------------------------------------
 for ARG in "$@"; do
     case $ARG in
@@ -26,9 +23,6 @@ for ARG in "$@"; do
                 echo "Error: --lang requires an argument (ex: --lang fr)" >&2
                 exit 1
             fi
-            ;;
-        --distro=*)
-            SELECTED_DISTRO="${ARG#*=}"
             ;;
         *)
             ;;
@@ -62,10 +56,10 @@ fi
 # PRUN
 # Launch programs in the proot terminal
 #------------------------------------------------------------------------------
-cat <<EOF > $PREFIX/bin/prun
+cat <<'EOF' > $PREFIX/bin/prun
 #!/bin/bash
-varname=\$(basename \$PREFIX/var/lib/proot-distro/installed-rootfs/$SELECTED_DISTRO/home/*)
-pd login $SELECTED_DISTRO --user \$varname --shared-tmp -- env DISPLAY=:1.0 \$@
+varname=$(basename $PREFIX/var/lib/proot-distro/installed-rootfs/debian/home/*)
+pd login debian --user $varname --shared-tmp -- env DISPLAY=:1.0 $@
 
 EOF
 chmod +x $PREFIX/bin/prun
@@ -74,10 +68,10 @@ chmod +x $PREFIX/bin/prun
 # ZRUN
 # Launch programs with the Zink driver
 #------------------------------------------------------------------------------
-cat <<EOF > $PREFIX/bin/zrun
+cat <<'EOF' > $PREFIX/bin/zrun
 #!/bin/bash
-varname=\$(basename \$PREFIX/var/lib/proot-distro/installed-rootfs/$SELECTED_DISTRO/home/*)
-pd login $SELECTED_DISTRO --user \$varname --shared-tmp -- env DISPLAY=:1.0 MESA_LOADER_DRIVER_OVERRIDE=zink TU_DEBUG=noconform \$@
+varname=$(basename $PREFIX/var/lib/proot-distro/installed-rootfs/debian/home/*)
+pd login debian --user $varname --shared-tmp -- env DISPLAY=:1.0 MESA_LOADER_DRIVER_OVERRIDE=zink TU_DEBUG=noconform $@
 
 EOF
 chmod +x $PREFIX/bin/zrun
@@ -86,10 +80,10 @@ chmod +x $PREFIX/bin/zrun
 # ZRUN HUD
 # Display the Zink HUD
 #------------------------------------------------------------------------------
-cat <<EOF > $PREFIX/bin/zrunhud
+cat <<'EOF' > $PREFIX/bin/zrunhud
 #!/bin/bash
-varname=\$(basename \$PREFIX/var/lib/proot-distro/installed-rootfs/$SELECTED_DISTRO/home/*)
-pd login $SELECTED_DISTRO --user \$varname --shared-tmp -- env DISPLAY=:1.0 MESA_LOADER_DRIVER_OVERRIDE=zink TU_DEBUG=noconform GALLIUM_HUD=fps \$@
+varname=$(basename $PREFIX/var/lib/proot-distro/installed-rootfs/debian/home/*)
+pd login debian --user $varname --shared-tmp -- env DISPLAY=:1.0 MESA_LOADER_DRIVER_OVERRIDE=zink TU_DEBUG=noconform GALLIUM_HUD=fps $@
 
 EOF
 chmod +x $PREFIX/bin/zrunhud
@@ -98,50 +92,50 @@ chmod +x $PREFIX/bin/zrunhud
 # CP2MENU
 # Launch programs from the XFCE menu instead of the terminal
 #------------------------------------------------------------------------------
-cat <<EOF > $PREFIX/bin/cp2menu
+cat <<'EOF' > $PREFIX/bin/cp2menu
 #!/bin/bash
 
 cd
 
-user_dir="\$PREFIX/var/lib/proot-distro/installed-rootfs/$SELECTED_DISTRO/home/"
+user_dir="$PREFIX/var/lib/proot-distro/installed-rootfs/debian/home/"
 
 # Get the username
-username=\$(basename "\$user_dir"/*)
+username=$(basename "$user_dir"/*)
 
-action=\$(zenity --list --title="\$(t "MSG_CP2MENU_CHOOSE_ACTION")" --text="\$(t "MSG_CP2MENU_SELECT_ACTION")" --radiolist --column="" --column="Action" TRUE "\$(t "MSG_CP2MENU_COPY_DESKTOP")" FALSE "\$(t "MSG_CP2MENU_DELETE_DESKTOP")")
+action=$(zenity --list --title="$(t "MSG_CP2MENU_CHOOSE_ACTION")" --text="$(t "MSG_CP2MENU_SELECT_ACTION")" --radiolist --column="" --column="Action" TRUE "$(t "MSG_CP2MENU_COPY_DESKTOP")" FALSE "$(t "MSG_CP2MENU_DELETE_DESKTOP")")
 
-if [[ -z \$action ]]; then
-  zenity --info --text="\$(t "MSG_CP2MENU_NO_ACTION")" --title="\$(t "MSG_CP2MENU_OPERATION_CANCELLED")"
+if [[ -z $action ]]; then
+  zenity --info --text="$(t "MSG_CP2MENU_NO_ACTION")" --title="$(t "MSG_CP2MENU_OPERATION_CANCELLED")"
   exit 0
 fi
 
-if [[ \$action == "\$(t "MSG_CP2MENU_COPY_DESKTOP")" ]]; then
-  selected_file=\$(zenity --file-selection --title="\$(t "MSG_CP2MENU_SELECT_DESKTOP")" --file-filter="*.desktop" --filename="\$PREFIX/var/lib/proot-distro/installed-rootfs/$SELECTED_DISTRO/usr/share/applications")
+if [[ $action == "$(t "MSG_CP2MENU_COPY_DESKTOP")" ]]; then
+  selected_file=$(zenity --file-selection --title="$(t "MSG_CP2MENU_SELECT_DESKTOP")" --file-filter="*.desktop" --filename="$PREFIX/var/lib/proot-distro/installed-rootfs/debian/usr/share/applications")
 
-  if [[ -z \$selected_file ]]; then
-    zenity --info --text="\$(t "MSG_CP2MENU_NO_FILE")" --title="\$(t "MSG_CP2MENU_OPERATION_CANCELLED")"
+  if [[ -z $selected_file ]]; then
+    zenity --info --text="$(t "MSG_CP2MENU_NO_FILE")" --title="$(t "MSG_CP2MENU_OPERATION_CANCELLED")"
     exit 0
   fi
 
-  desktop_filename=\$(basename "\$selected_file")
+  desktop_filename=$(basename "$selected_file")
 
-  cp "\$selected_file" "\$PREFIX/share/applications/"
-  sed -i "s/^Exec=\(.*\)$/Exec=pd login $SELECTED_DISTRO --user \$username --shared-tmp -- env DISPLAY=:1.0 \1/" "\$PREFIX/share/applications/\$desktop_filename"
+  cp "$selected_file" "$PREFIX/share/applications/"
+  sed -i "s/^Exec=\(.*\)$/Exec=pd login debian --user $username --shared-tmp -- env DISPLAY=:1.0 \1/" "$PREFIX/share/applications/$desktop_filename"
+  
+  zenity --info --text="$(t "MSG_CP2MENU_SUCCESS")" --title="$(t "MSG_CP2MENU_SUCCESS_TITLE")"
+elif [[ $action == "$(t "MSG_CP2MENU_DELETE_DESKTOP")" ]]; then
+  selected_file=$(zenity --file-selection --title="$(t "MSG_CP2MENU_SELECT_DELETE")" --file-filter="*.desktop" --filename="$PREFIX/share/applications")
 
-  zenity --info --text="\$(t "MSG_CP2MENU_SUCCESS")" --title="\$(t "MSG_CP2MENU_SUCCESS_TITLE")"
-elif [[ \$action == "\$(t "MSG_CP2MENU_DELETE_DESKTOP")" ]]; then
-  selected_file=\$(zenity --file-selection --title="\$(t "MSG_CP2MENU_SELECT_DELETE")" --file-filter="*.desktop" --filename="\$PREFIX/share/applications")
-
-  if [[ -z \$selected_file ]]; then
-    zenity --info --text="\$(t "MSG_CP2MENU_NO_DELETE")" --title="\$(t "MSG_CP2MENU_OPERATION_CANCELLED")"
+  if [[ -z $selected_file ]]; then
+    zenity --info --text="$(t "MSG_CP2MENU_NO_DELETE")" --title="$(t "MSG_CP2MENU_OPERATION_CANCELLED")"
     exit 0
   fi
 
-  desktop_filename=\$(basename "\$selected_file")
+  desktop_filename=$(basename "$selected_file")
 
-  rm "\$selected_file"
+  rm "$selected_file"
 
-  zenity --info --text="\$(t "MSG_CP2MENU_DELETE_SUCCESS")" --title="\$(t "MSG_CP2MENU_SUCCESS_TITLE")"
+  zenity --info --text="$(t "MSG_CP2MENU_DELETE_SUCCESS")" --title="$(t "MSG_CP2MENU_SUCCESS_TITLE")"
 fi
 
 EOF

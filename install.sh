@@ -25,9 +25,6 @@ VERBOSE=false
 PROOT_USERNAME=""
 PROOT_PASSWORD=""
 
-# Selected distribution for PRoot
-SELECTED_DISTRO="debian"
-
 #------------------------------------------------------------------------------
 # SELECTORS OF MODULES
 #------------------------------------------------------------------------------
@@ -127,7 +124,6 @@ show_help() {
     echo "  --font | -f       $(t MSG_OPT_FONT)"
     echo "  --xfce | -x       $(t MSG_OPT_XFCE)"
     echo "  --proot | -pr     $(t MSG_OPT_PROOT)"
-    echo "  --distro | -d     $(t MSG_OPT_DISTRO)"
     echo "  --x11             $(t MSG_OPT_X11)"
     echo "  --skip            $(t MSG_OPT_SKIP)"
     echo "  --uninstall       $(t MSG_OPT_UNINSTALL)"
@@ -171,17 +167,6 @@ while [[ $# -gt 0 ]]; do
         --proot|-pr)
             PROOT_CHOICE=true
             ONLY_GUM=false
-            shift
-            ;;
-        --distro|-d)
-            shift
-            if [ -n "$1" ]; then
-                SELECTED_DISTRO="$1"
-                shift
-            fi
-            ;;
-        --distro=*)
-            SELECTED_DISTRO="${1#*=}"
             shift
             ;;
         --x11)
@@ -1602,68 +1587,11 @@ EOF
 }
 
 #------------------------------------------------------------------------------
-# DISTRO SELECTION FOR PROOT
-#------------------------------------------------------------------------------
-select_distro() {
-    if [ "$SELECTED_DISTRO" != "debian" ]; then
-        # Already set via CLI argument, skip selection
-        return
-    fi
-
-    if $FULL_INSTALL; then
-        # Default to debian in full install mode
-        return
-    fi
-
-    if $USE_GUM; then
-        SELECTED_DISTRO=$(gum_choose "$(t MSG_SELECT_DISTRO)" --selected="$(t MSG_DISTRO_DEBIAN)" --height=9 \
-            "debian" \
-            "ubuntu" \
-            "archlinux" \
-            "fedora" \
-            "alpine" \
-            "void" \
-            "opensuse")
-    else
-        echo -e "${COLOR_BLUE}$(t MSG_SELECT_DISTRO)${COLOR_RESET}"
-        echo
-        echo -e "${COLOR_BLUE}1) $(t MSG_DISTRO_DEBIAN)${COLOR_RESET}"
-        echo -e "${COLOR_BLUE}2) $(t MSG_DISTRO_UBUNTU)${COLOR_RESET}"
-        echo -e "${COLOR_BLUE}3) $(t MSG_DISTRO_ARCHLINUX)${COLOR_RESET}"
-        echo -e "${COLOR_BLUE}4) $(t MSG_DISTRO_FEDORA)${COLOR_RESET}"
-        echo -e "${COLOR_BLUE}5) $(t MSG_DISTRO_ALPINE)${COLOR_RESET}"
-        echo -e "${COLOR_BLUE}6) $(t MSG_DISTRO_VOID)${COLOR_RESET}"
-        echo -e "${COLOR_BLUE}7) $(t MSG_DISTRO_OPENSUSE)${COLOR_RESET}"
-        echo
-        printf "${COLOR_GOLD}$(t MSG_ENTER_CHOICE_123) ${COLOR_RESET}"
-        tput setaf 3
-        read -r -e -p "" -i "1" CHOICE
-        tput sgr0
-        tput cuu 11
-        tput ed
-
-        case $CHOICE in
-            1) SELECTED_DISTRO="debian" ;;
-            2) SELECTED_DISTRO="ubuntu" ;;
-            3) SELECTED_DISTRO="archlinux" ;;
-            4) SELECTED_DISTRO="fedora" ;;
-            5) SELECTED_DISTRO="alpine" ;;
-            6) SELECTED_DISTRO="void" ;;
-            7) SELECTED_DISTRO="opensuse" ;;
-            *) SELECTED_DISTRO="debian" ;;
-        esac
-    fi
-}
-
-#------------------------------------------------------------------------------
 # INSTALLATION DE DEBIAN PROOT
 #------------------------------------------------------------------------------
 install_proot() {
     if $PROOT_CHOICE; then
         title_msg "$(t MSG_CONFIG_PROOT)"
-
-        # Select distro before proceeding
-        select_distro
 
         execute_command "curl -O https://raw.githubusercontent.com/devohmycode/OhMyTermux/$BRANCH/proot.sh" "$(t MSG_DOWNLOAD_PROOT_SCRIPT)" || error_msg "$(t MSG_ERROR_DOWNLOAD_PROOT)"
         execute_command "chmod +x proot.sh" "$(t MSG_EXECUTE_PROOT_SCRIPT)"
@@ -1672,30 +1600,28 @@ install_proot() {
         if [ -n "$PROOT_USERNAME" ] && [ -n "$PROOT_PASSWORD" ]; then
             if $USE_GUM; then
                 execute_command "pkg install proot-distro -y" "$(t MSG_INSTALL_PROOT_DISTRO)"
-                download_and_execute "https://raw.githubusercontent.com/devohmycode/OhMyTermux/$BRANCH/proot.sh" "PRoot" --gum --username="$PROOT_USERNAME" --password="$PROOT_PASSWORD" --distro="$SELECTED_DISTRO"
+                download_and_execute "https://raw.githubusercontent.com/devohmycode/OhMyTermux/$BRANCH/proot.sh" "PRoot" --gum --username="$PROOT_USERNAME" --password="$PROOT_PASSWORD"
                 install_utils
             else
                 execute_command "pkg install proot-distro -y" "$(t MSG_INSTALL_PROOT_DISTRO)"
-                download_and_execute "https://raw.githubusercontent.com/devohmycode/OhMyTermux/$BRANCH/proot.sh" "PRoot" --username="$PROOT_USERNAME" --password="$PROOT_PASSWORD" --distro="$SELECTED_DISTRO"
+                download_and_execute "https://raw.githubusercontent.com/devohmycode/OhMyTermux/$BRANCH/proot.sh" "PRoot" --username="$PROOT_USERNAME" --password="$PROOT_PASSWORD"
                 install_utils
             fi
         else
-            local CONFIRM_MSG
-            CONFIRM_MSG=$(printf "$(t MSG_CONFIRM_INSTALL_PROOT_DISTRO)" "$SELECTED_DISTRO")
             if $USE_GUM; then
-                if gum_confirm "$CONFIRM_MSG"; then
+                if gum_confirm "$(t MSG_CONFIRM_INSTALL_PROOT)"; then
                     execute_command "pkg install proot-distro -y" "$(t MSG_INSTALL_PROOT_DISTRO)"
-                    download_and_execute "https://raw.githubusercontent.com/devohmycode/OhMyTermux/$BRANCH/proot.sh" "PRoot" --gum --distro="$SELECTED_DISTRO"
+                    download_and_execute "https://raw.githubusercontent.com/devohmycode/OhMyTermux/$BRANCH/proot.sh" "PRoot" --gum
                     install_utils
                 fi
             else
-                printf "${COLOR_BLUE}${CONFIRM_MSG} (O/n) : ${COLOR_RESET}"
+                printf "${COLOR_BLUE}$(t MSG_CONFIRM_INSTALL_PROOT) (O/n) : ${COLOR_RESET}"
                 read -r -e -p "" -i "o" CHOICE
                 tput cuu1
                 tput el
                 if [[ "$CHOICE" =~ ^[oO]$ ]]; then
                     execute_command "pkg install proot-distro -y" "$(t MSG_INSTALL_PROOT_DISTRO)"
-                    ./proot.sh --distro="$SELECTED_DISTRO"
+                    ./proot.sh
                     install_utils
                 fi
             fi
@@ -1707,7 +1633,7 @@ install_proot() {
 # GETTING THE USERNAME
 #------------------------------------------------------------------------------
 get_username() {
-    local USER_DIR="$PREFIX/var/lib/proot-distro/installed-rootfs/$SELECTED_DISTRO/home"
+    local USER_DIR="$PREFIX/var/lib/proot-distro/installed-rootfs/debian/home"
     local USERNAME
     USERNAME=$(ls -1 "$USER_DIR" 2>/dev/null | grep -v '^$' | head -n 1)
     if [ -z "$USERNAME" ]; then
@@ -1722,20 +1648,19 @@ get_username() {
 #------------------------------------------------------------------------------
 install_utils() {
     title_msg "$(t MSG_CONFIG_UTILS)"
-    download_and_execute "https://raw.githubusercontent.com/devohmycode/OhMyTermux/$BRANCH/utils.sh" "Utils" --distro="$SELECTED_DISTRO"
+    download_and_execute "https://raw.githubusercontent.com/devohmycode/OhMyTermux/$BRANCH/utils.sh" "Utils"
 
     if ! USERNAME=$(get_username); then
         error_msg "$(t MSG_ERROR_GET_USERNAME)"
         return 1
     fi
 
-    BASHRC_PROOT="${PREFIX}/var/lib/proot-distro/installed-rootfs/${SELECTED_DISTRO}/home/${USERNAME}/.bashrc"
+    BASHRC_PROOT="${PREFIX}/var/lib/proot-distro/installed-rootfs/debian/home/${USERNAME}/.bashrc"
     if [ ! -f "$BASHRC_PROOT" ]; then
         error_msg "$(t MSG_ERROR_BASHRC_NOT_EXISTS) $USERNAME."
-        execute_command "proot-distro login $SELECTED_DISTRO --shared-tmp --env DISPLAY=:1.0 -- touch \"$BASHRC_PROOT\"" "$(t MSG_CONFIG_BASH_DEBIAN)"
+        execute_command "proot-distro login debian --shared-tmp --env DISPLAY=:1.0 -- touch \"$BASHRC_PROOT\"" "$(t MSG_CONFIG_BASH_DEBIAN)"
     fi
 
-    # Common aliases for all distros
     cat << "EOL" >> "$BASHRC_PROOT"
 
 export DISPLAY=:1.0
@@ -1749,19 +1674,6 @@ alias la="ls -A"
 alias q="exit"
 alias s="source"
 alias c="clear"
-alias start='echo "Please run from Termux and not Debian proot."'
-alias cm="chmod +x"
-alias clone="git clone"
-alias push="git pull && git add . && git commit -m 'mobile push' && git push"
-alias g="git"
-alias n="nano"
-alias bashrc="nano \$HOME/.bashrc"
-EOL
-
-    # Distro-specific package manager aliases
-    case $SELECTED_DISTRO in
-        debian|ubuntu)
-            cat << "EOL" >> "$BASHRC_PROOT"
 alias cat="bat"
 alias apt="sudo nala"
 alias install="sudo nala install -y"
@@ -1771,54 +1683,14 @@ alias remove="sudo nala remove -y"
 alias list="nala list --upgradeable"
 alias show="nala show"
 alias search="nala search"
+alias start='echo "Please run from Termux and not Debian proot."'
+alias cm="chmod +x"
+alias clone="git clone"
+alias push="git pull && git add . && git commit -m 'mobile push' && git push"
+alias g="git"
+alias n="nano"
+alias bashrc="nano \$HOME/.bashrc"
 EOL
-            ;;
-        archlinux)
-            cat << "EOL" >> "$BASHRC_PROOT"
-alias install="sudo pacman -S --noconfirm"
-alias update="sudo pacman -Sy"
-alias upgrade="sudo pacman -Syu --noconfirm"
-alias remove="sudo pacman -R --noconfirm"
-alias search="pacman -Ss"
-EOL
-            ;;
-        fedora)
-            cat << "EOL" >> "$BASHRC_PROOT"
-alias install="sudo dnf install -y"
-alias update="sudo dnf check-update"
-alias upgrade="sudo dnf upgrade -y"
-alias remove="sudo dnf remove -y"
-alias search="dnf search"
-EOL
-            ;;
-        alpine)
-            cat << "EOL" >> "$BASHRC_PROOT"
-alias install="sudo apk add"
-alias update="sudo apk update"
-alias upgrade="sudo apk upgrade"
-alias remove="sudo apk del"
-alias search="apk search"
-EOL
-            ;;
-        void)
-            cat << "EOL" >> "$BASHRC_PROOT"
-alias install="sudo xbps-install -y"
-alias update="sudo xbps-install -S"
-alias upgrade="sudo xbps-install -Syu"
-alias remove="sudo xbps-remove -y"
-alias search="xbps-query -Rs"
-EOL
-            ;;
-        opensuse)
-            cat << "EOL" >> "$BASHRC_PROOT"
-alias install="sudo zypper install -y"
-alias update="sudo zypper refresh"
-alias upgrade="sudo zypper update -y"
-alias remove="sudo zypper remove -y"
-alias search="zypper search"
-EOL
-            ;;
-    esac
 
     USERNAME=$(get_username)
 
@@ -1827,8 +1699,8 @@ EOL
 
     cat << EOL >> "$TMP_FILE"
 
-# Alias to connect to ${SELECTED_DISTRO} Proot
-alias ${SELECTED_DISTRO}="proot-distro login ${SELECTED_DISTRO} --shared-tmp --user ${USERNAME}"
+# Alias to connect to Debian Proot
+alias debian="proot-distro login debian --shared-tmp --user ${USERNAME}"
 EOL
 
     if [ -f "$BASHRC" ]; then
