@@ -23,6 +23,7 @@ SELECTED_WALLPAPER=""
 # PROOT VARIABLES
 PROOT_USERNAME=""
 PROOT_PASSWORD=""
+SELECTED_DISTRO="debian"
 
 #------------------------------------------------------------------------------
 # PRELIMINARY ARGUMENT PARSING FOR LANGUAGE
@@ -125,6 +126,10 @@ for ARG in "$@"; do
             PROOT_PASSWORD="${ARG#*=}"
             shift
             ;;
+        --distro=*)
+            SELECTED_DISTRO="${ARG#*=}"
+            shift
+            ;;
         --lang|-l)
             # Skip --lang as it's already processed
             shift
@@ -161,59 +166,121 @@ trap finish EXIT
 # PROOT PACKAGES INSTALLATION
 #------------------------------------------------------------------------------
 install_packages_proot() {
-    local PKGS_PROOT=('sudo' 'wget' 'nala' 'xfconf')
-    #local PKGS_PROOT=('sudo' 'wget' 'nala' 'xfconf' 'gnome-themes-extra')
-    for PKG in "${PKGS_PROOT[@]}"; do
-        execute_command "proot-distro login debian --shared-tmp -- env DISPLAY=:1.0 apt install $PKG -y" "Installation of $PKG"
-    done
+    case $SELECTED_DISTRO in
+        debian|ubuntu)
+            local PKGS_PROOT=('sudo' 'wget' 'nala' 'xfconf')
+            for PKG in "${PKGS_PROOT[@]}"; do
+                execute_command "proot-distro login $SELECTED_DISTRO --shared-tmp -- env DISPLAY=:1.0 apt install $PKG -y" "Installation of $PKG"
+            done
+            ;;
+        archlinux)
+            execute_command "proot-distro login $SELECTED_DISTRO --shared-tmp -- pacman -Syu --noconfirm sudo wget xfconf" "Installation of packages"
+            ;;
+        fedora)
+            execute_command "proot-distro login $SELECTED_DISTRO --shared-tmp -- dnf install -y sudo wget xfconf" "Installation of packages"
+            ;;
+        alpine)
+            execute_command "proot-distro login $SELECTED_DISTRO --shared-tmp -- apk add sudo wget xfconf" "Installation of packages"
+            ;;
+        void)
+            execute_command "proot-distro login $SELECTED_DISTRO --shared-tmp -- xbps-install -Sy sudo wget xfconf" "Installation of packages"
+            ;;
+        opensuse)
+            execute_command "proot-distro login $SELECTED_DISTRO --shared-tmp -- zypper install -y sudo wget xfconf" "Installation of packages"
+            ;;
+    esac
 }
 
 #------------------------------------------------------------------------------
 # PROOT USER CREATION
 #------------------------------------------------------------------------------
 create_user_proot() {
-    execute_command "
-        proot-distro login debian --shared-tmp -- env DISPLAY=:1.0 groupadd storage
-        proot-distro login debian --shared-tmp -- env DISPLAY=:1.0 groupadd wheel
-        proot-distro login debian --shared-tmp -- env DISPLAY=:1.0 useradd -m -g users -G wheel,audio,video,storage -s /bin/bash '$USERNAME'
-        echo '$USERNAME:$PASSWORD' | proot-distro login debian --shared-tmp -- env DISPLAY=:1.0 chpasswd
-    " "User creation"
+    case $SELECTED_DISTRO in
+        alpine)
+            execute_command "
+                proot-distro login $SELECTED_DISTRO --shared-tmp -- env DISPLAY=:1.0 addgroup storage 2>/dev/null || true
+                proot-distro login $SELECTED_DISTRO --shared-tmp -- env DISPLAY=:1.0 addgroup wheel 2>/dev/null || true
+                proot-distro login $SELECTED_DISTRO --shared-tmp -- env DISPLAY=:1.0 adduser -D -G users -s /bin/ash '$USERNAME'
+                proot-distro login $SELECTED_DISTRO --shared-tmp -- env DISPLAY=:1.0 addgroup '$USERNAME' wheel
+                proot-distro login $SELECTED_DISTRO --shared-tmp -- env DISPLAY=:1.0 addgroup '$USERNAME' audio
+                proot-distro login $SELECTED_DISTRO --shared-tmp -- env DISPLAY=:1.0 addgroup '$USERNAME' video
+                proot-distro login $SELECTED_DISTRO --shared-tmp -- env DISPLAY=:1.0 addgroup '$USERNAME' storage
+                echo '$USERNAME:$PASSWORD' | proot-distro login $SELECTED_DISTRO --shared-tmp -- env DISPLAY=:1.0 chpasswd
+            " "User creation"
+            ;;
+        *)
+            execute_command "
+                proot-distro login $SELECTED_DISTRO --shared-tmp -- env DISPLAY=:1.0 groupadd storage 2>/dev/null || true
+                proot-distro login $SELECTED_DISTRO --shared-tmp -- env DISPLAY=:1.0 groupadd wheel 2>/dev/null || true
+                proot-distro login $SELECTED_DISTRO --shared-tmp -- env DISPLAY=:1.0 useradd -m -g users -G wheel,audio,video,storage -s /bin/bash '$USERNAME'
+                echo '$USERNAME:$PASSWORD' | proot-distro login $SELECTED_DISTRO --shared-tmp -- env DISPLAY=:1.0 chpasswd
+            " "User creation"
+            ;;
+    esac
 }
 
 #------------------------------------------------------------------------------
 # USER RIGHTS CONFIGURATION
 #------------------------------------------------------------------------------
 configure_user_rights() {
-    execute_command "
-        # Add user to sudo group
-        proot-distro login debian --shared-tmp -- env DISPLAY=:1.0 usermod -aG sudo '$USERNAME'
+    local ROOTFS="$PREFIX/var/lib/proot-distro/installed-rootfs/$SELECTED_DISTRO"
 
-        # Create sudoers.d file for user
-        echo '$USERNAME ALL=(ALL) NOPASSWD: ALL' > '$PREFIX/var/lib/proot-distro/installed-rootfs/debian/etc/sudoers.d/$USERNAME'
-        chmod 0440 '$PREFIX/var/lib/proot-distro/installed-rootfs/debian/etc/sudoers.d/$USERNAME'
-
-        # Main sudoers file configuration
-        echo '%sudo ALL=(ALL:ALL) ALL' >> '$PREFIX/var/lib/proot-distro/installed-rootfs/debian/etc/sudoers'
-
-        # Check permissions
-        chmod 440 '$PREFIX/var/lib/proot-distro/installed-rootfs/debian/etc/sudoers'
-        chown root:root '$PREFIX/var/lib/proot-distro/installed-rootfs/debian/etc/sudoers'
-    " "Sudo rights configuration"
+    case $SELECTED_DISTRO in
+        debian|ubuntu)
+            execute_command "
+                proot-distro login $SELECTED_DISTRO --shared-tmp -- env DISPLAY=:1.0 usermod -aG sudo '$USERNAME'
+                echo '$USERNAME ALL=(ALL) NOPASSWD: ALL' > '$ROOTFS/etc/sudoers.d/$USERNAME'
+                chmod 0440 '$ROOTFS/etc/sudoers.d/$USERNAME'
+                echo '%sudo ALL=(ALL:ALL) ALL' >> '$ROOTFS/etc/sudoers'
+                chmod 440 '$ROOTFS/etc/sudoers'
+                chown root:root '$ROOTFS/etc/sudoers'
+            " "Sudo rights configuration"
+            ;;
+        alpine)
+            execute_command "
+                proot-distro login $SELECTED_DISTRO --shared-tmp -- env DISPLAY=:1.0 addgroup '$USERNAME' wheel
+                mkdir -p '$ROOTFS/etc/sudoers.d'
+                echo '$USERNAME ALL=(ALL) NOPASSWD: ALL' > '$ROOTFS/etc/sudoers.d/$USERNAME'
+                chmod 0440 '$ROOTFS/etc/sudoers.d/$USERNAME'
+                echo '%wheel ALL=(ALL:ALL) ALL' >> '$ROOTFS/etc/sudoers'
+                chmod 440 '$ROOTFS/etc/sudoers'
+                chown root:root '$ROOTFS/etc/sudoers'
+            " "Sudo rights configuration"
+            ;;
+        *)
+            execute_command "
+                proot-distro login $SELECTED_DISTRO --shared-tmp -- env DISPLAY=:1.0 usermod -aG wheel '$USERNAME'
+                mkdir -p '$ROOTFS/etc/sudoers.d'
+                echo '$USERNAME ALL=(ALL) NOPASSWD: ALL' > '$ROOTFS/etc/sudoers.d/$USERNAME'
+                chmod 0440 '$ROOTFS/etc/sudoers.d/$USERNAME'
+                echo '%wheel ALL=(ALL:ALL) ALL' >> '$ROOTFS/etc/sudoers'
+                chmod 440 '$ROOTFS/etc/sudoers'
+                chown root:root '$ROOTFS/etc/sudoers'
+            " "Sudo rights configuration"
+            ;;
+    esac
 }
 
 #------------------------------------------------------------------------------
 # MESA-VULKAN INSTALLATION
 #------------------------------------------------------------------------------
 install_mesa_vulkan() {
-    local MESA_PACKAGE="mesa-vulkan-kgsl_24.1.0-devel-20240120_arm64.deb"
-    local MESA_URL="https://raw.githubusercontent.com/devohmycode/OhMyTermux/$BRANCH/src/$MESA_PACKAGE"
+    case $SELECTED_DISTRO in
+        debian|ubuntu)
+            local MESA_PACKAGE="mesa-vulkan-kgsl_24.1.0-devel-20240120_arm64.deb"
+            local MESA_URL="https://raw.githubusercontent.com/devohmycode/OhMyTermux/$BRANCH/src/$MESA_PACKAGE"
 
-    if ! proot-distro login debian --shared-tmp -- dpkg -s mesa-vulkan-kgsl &> /dev/null; then
-        execute_command "curl -fL -o $PREFIX/tmp/$MESA_PACKAGE $MESA_URL" "$(t "MSG_PROOT_MESA_DOWNLOAD")"
-        execute_command "proot-distro login debian --shared-tmp -- apt install -y /tmp/$MESA_PACKAGE" "$(t "MSG_PROOT_MESA_INSTALLATION")"
-    else
-        info_msg "$(t "MSG_PROOT_MESA_ALREADY_INSTALLED")"
-    fi
+            if ! proot-distro login $SELECTED_DISTRO --shared-tmp -- dpkg -s mesa-vulkan-kgsl &> /dev/null; then
+                execute_command "curl -fL -o $PREFIX/tmp/$MESA_PACKAGE $MESA_URL" "$(t "MSG_PROOT_MESA_DOWNLOAD")"
+                execute_command "proot-distro login $SELECTED_DISTRO --shared-tmp -- apt install -y /tmp/$MESA_PACKAGE" "$(t "MSG_PROOT_MESA_INSTALLATION")"
+            else
+                info_msg "$(t "MSG_PROOT_MESA_ALREADY_INSTALLED")"
+            fi
+            ;;
+        *)
+            info_msg "$(t "MSG_PROOT_MESA_SKIP")"
+            ;;
+    esac
 }
 
 #------------------------------------------------------------------------------
@@ -235,7 +302,7 @@ copy_theme() {
             ;;
     esac
 
-    execute_command "cp -r $PREFIX/share/themes/$theme_path $PREFIX/var/lib/proot-distro/installed-rootfs/debian/usr/share/themes/" "$(t "MSG_PROOT_THEME_CONFIGURATION")"
+    execute_command "cp -r $PREFIX/share/themes/$theme_path $PREFIX/var/lib/proot-distro/installed-rootfs/$SELECTED_DISTRO/usr/share/themes/" "$(t "MSG_PROOT_THEME_CONFIGURATION")"
 }
 
 #------------------------------------------------------------------------------
@@ -263,7 +330,7 @@ copy_icons() {
             ;;
     esac
 
-    execute_command "cp -r $PREFIX/share/icons/$icon_path $PREFIX/var/lib/proot-distro/installed-rootfs/debian/usr/share/icons/" "$(t "MSG_PROOT_ICONS_CONFIGURATION")"
+    execute_command "cp -r $PREFIX/share/icons/$icon_path $PREFIX/var/lib/proot-distro/installed-rootfs/$SELECTED_DISTRO/usr/share/icons/" "$(t "MSG_PROOT_ICONS_CONFIGURATION")"
 }
 
 #------------------------------------------------------------------------------
@@ -277,11 +344,11 @@ configure_themes_and_icons() {
 
     # Create necessary directories
     execute_command "
-        mkdir -p \"$PREFIX/var/lib/proot-distro/installed-rootfs/debian/usr/share/themes\"
-        mkdir -p \"$PREFIX/var/lib/proot-distro/installed-rootfs/debian/usr/share/icons\"
-        mkdir -p \"$PREFIX/var/lib/proot-distro/installed-rootfs/debian/usr/share/backgrounds/whitesur\"
-        mkdir -p \"$PREFIX/var/lib/proot-distro/installed-rootfs/debian/home/$USERNAME/.fonts/\"
-        mkdir -p \"$PREFIX/var/lib/proot-distro/installed-rootfs/debian/home/$USERNAME/.themes/\"
+        mkdir -p \"$PREFIX/var/lib/proot-distro/installed-rootfs/$SELECTED_DISTRO/usr/share/themes\"
+        mkdir -p \"$PREFIX/var/lib/proot-distro/installed-rootfs/$SELECTED_DISTRO/usr/share/icons\"
+        mkdir -p \"$PREFIX/var/lib/proot-distro/installed-rootfs/$SELECTED_DISTRO/usr/share/backgrounds/whitesur\"
+        mkdir -p \"$PREFIX/var/lib/proot-distro/installed-rootfs/$SELECTED_DISTRO/home/$USERNAME/.fonts/\"
+        mkdir -p \"$PREFIX/var/lib/proot-distro/installed-rootfs/$SELECTED_DISTRO/home/$USERNAME/.themes/\"
     " "$(t "MSG_PROOT_CREATING_DIRECTORIES")"
 
     # Copy themes if installed
@@ -296,16 +363,16 @@ configure_themes_and_icons() {
 
     # Copy wallpapers if installed
     if [ "$INSTALL_WALLPAPERS" = true ]; then
-        execute_command "cp -r $PREFIX/share/backgrounds/whitesur/* $PREFIX/var/lib/proot-distro/installed-rootfs/debian/usr/share/backgrounds/whitesur/" "$(t "MSG_PROOT_WALLPAPERS_CONFIG")"
+        execute_command "cp -r $PREFIX/share/backgrounds/whitesur/* $PREFIX/var/lib/proot-distro/installed-rootfs/$SELECTED_DISTRO/usr/share/backgrounds/whitesur/" "$(t "MSG_PROOT_WALLPAPERS_CONFIG")"
     fi
 
     # Cursors configuration
     if [ "$INSTALL_CURSORS" = true ]; then
         cd "$PREFIX/share/icons"
-        execute_command "find dist-dark | cpio -pdm \"$PREFIX/var/lib/proot-distro/installed-rootfs/debian/usr/share/icons\"" "$(t "MSG_PROOT_CURSORS_CONFIG")"
+        execute_command "find dist-dark | cpio -pdm \"$PREFIX/var/lib/proot-distro/installed-rootfs/$SELECTED_DISTRO/usr/share/icons\"" "$(t "MSG_PROOT_CURSORS_CONFIG")"
 
         # Xresources configuration
-        cat << EOF > "$PREFIX/var/lib/proot-distro/installed-rootfs/debian/home/$USERNAME/.Xresources"
+        cat << EOF > "$PREFIX/var/lib/proot-distro/installed-rootfs/$SELECTED_DISTRO/home/$USERNAME/.Xresources"
 Xcursor.theme: dist-dark
 EOF
     fi
@@ -318,7 +385,7 @@ EOF
 # MAIN FUNCTION
 #------------------------------------------------------------------------------
 check_dependencies
-title_msg "$(t "MSG_PROOT_DEBIAN_INSTALLATION")"
+title_msg "$(printf "$(t "MSG_PROOT_DISTRO_INSTALLATION")" "$SELECTED_DISTRO")"
 
 if [ $# -eq 0 ] && [ -z "$PROOT_USERNAME" ] && [ -z "$PROOT_PASSWORD" ]; then
     if [ "$USE_GUM" = true ]; then
@@ -391,18 +458,39 @@ elif [ $# -eq 2 ] && [ -z "$PROOT_USERNAME" ] && [ -z "$PROOT_PASSWORD" ]; then
     PROOT_PASSWORD="$2"
 fi
 
-execute_command "proot-distro install debian" "$(t "MSG_PROOT_DISTRIBUTION_INSTALLATION")"
+execute_command "proot-distro install $SELECTED_DISTRO" "$(t "MSG_PROOT_DISTRIBUTION_INSTALLATION")"
 
 #------------------------------------------------------------------------------
 # DEBIAN INSTALLATION CHECK
 #------------------------------------------------------------------------------
-if [ ! -d "$PREFIX/var/lib/proot-distro/installed-rootfs/debian" ]; then
-    error_msg "$(t "MSG_PROOT_DEBIAN_FAILED")"
+if [ ! -d "$PREFIX/var/lib/proot-distro/installed-rootfs/$SELECTED_DISTRO" ]; then
+    error_msg "$(printf "$(t "MSG_PROOT_DISTRO_FAILED")" "$SELECTED_DISTRO")"
     exit 1
 fi
 
-execute_command "proot-distro login debian --shared-tmp -- env DISPLAY=:1.0 apt update" "$(t "MSG_PROOT_UPDATE_SEARCH")"
-execute_command "proot-distro login debian --shared-tmp -- env DISPLAY=:1.0 apt upgrade -y" "$(t "MSG_PROOT_UPDATE_PACKAGES")"
+case $SELECTED_DISTRO in
+    debian|ubuntu)
+        execute_command "proot-distro login $SELECTED_DISTRO --shared-tmp -- env DISPLAY=:1.0 apt update" "$(t "MSG_PROOT_UPDATE_SEARCH")"
+        execute_command "proot-distro login $SELECTED_DISTRO --shared-tmp -- env DISPLAY=:1.0 apt upgrade -y" "$(t "MSG_PROOT_UPDATE_PACKAGES")"
+        ;;
+    archlinux)
+        execute_command "proot-distro login $SELECTED_DISTRO --shared-tmp -- pacman -Syu --noconfirm" "$(t "MSG_PROOT_UPDATE_PACKAGES")"
+        ;;
+    fedora)
+        execute_command "proot-distro login $SELECTED_DISTRO --shared-tmp -- dnf update -y" "$(t "MSG_PROOT_UPDATE_PACKAGES")"
+        ;;
+    alpine)
+        execute_command "proot-distro login $SELECTED_DISTRO --shared-tmp -- apk update" "$(t "MSG_PROOT_UPDATE_SEARCH")"
+        execute_command "proot-distro login $SELECTED_DISTRO --shared-tmp -- apk upgrade" "$(t "MSG_PROOT_UPDATE_PACKAGES")"
+        ;;
+    void)
+        execute_command "proot-distro login $SELECTED_DISTRO --shared-tmp -- xbps-install -Syu" "$(t "MSG_PROOT_UPDATE_PACKAGES")"
+        ;;
+    opensuse)
+        execute_command "proot-distro login $SELECTED_DISTRO --shared-tmp -- zypper refresh" "$(t "MSG_PROOT_UPDATE_SEARCH")"
+        execute_command "proot-distro login $SELECTED_DISTRO --shared-tmp -- zypper update -y" "$(t "MSG_PROOT_UPDATE_PACKAGES")"
+        ;;
+esac
 
 install_packages_proot
 
@@ -419,8 +507,8 @@ configure_user_rights
 #------------------------------------------------------------------------------
 TIMEZONE=$(getprop persist.sys.timezone)
 execute_command "
-    proot-distro login debian -- rm /etc/localtime
-    proot-distro login debian -- cp /usr/share/zoneinfo/$TIMEZONE /etc/localtime
+    proot-distro login $SELECTED_DISTRO -- rm /etc/localtime
+    proot-distro login $SELECTED_DISTRO -- cp /usr/share/zoneinfo/$TIMEZONE /etc/localtime
 " "$(t "MSG_PROOT_TIMEZONE_CONFIG_MSG")"
 
 #------------------------------------------------------------------------------
