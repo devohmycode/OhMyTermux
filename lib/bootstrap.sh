@@ -91,6 +91,7 @@ download_lib_system() {
         "lib/execute.sh"
         "lib/gum_ui.sh"
         "lib/banner.sh"
+        "lib/plugins.sh"
     )
 
     mkdir -p "$SCRIPT_DIR/lib"

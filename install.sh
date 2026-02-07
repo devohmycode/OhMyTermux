@@ -77,6 +77,9 @@ source "$SCRIPT_DIR/lib/i18n_loader.sh"
 ERROR_MSG_KEY="MSG_ERROR_INSTALL"
 ERROR_REFER_KEY="MSG_ERROR_REFER_MESSAGES"
 
+# Initialize plugin system (discover manifests, resolve order)
+type init_plugin_system &>/dev/null && init_plugin_system
+
 # Configure banner title (uses i18n key)
 BANNER_TITLE=""  # Will be set after i18n init via t()
 
@@ -156,11 +159,18 @@ show_help() {
     echo "$(t MSG_HELP_EXAMPLES)"
     echo "  $(t MSG_EXAMPLE_GUM)"
     echo "  $(t MSG_EXAMPLE_FULL)"
+    type show_plugin_help &>/dev/null && show_plugin_help
 }
 
 #------------------------------------------------------------------------------
 # ARGUMENTS MANAGEMENT
 #------------------------------------------------------------------------------
+# Pre-parse plugin CLI flags
+if type parse_plugin_args &>/dev/null; then
+    parse_plugin_args "$@"
+    set -- "${REMAINING_ARGS[@]}"
+fi
+
 while [[ $# -gt 0 ]]; do
     case $1 in
         --gum|-g)
@@ -236,6 +246,7 @@ while [[ $# -gt 0 ]]; do
             X11_CHOICE=true
             SCRIPT_CHOICE=true
             ONLY_GUM=false
+            type enable_all_plugins &>/dev/null && enable_all_plugins
             shift
             ;;
         --help|-h)
@@ -314,6 +325,10 @@ fi
 # Set banner title now that i18n is initialized
 BANNER_TITLE="$(t MSG_BANNER_TITLE)"
 
+# Load plugin translations and resolve dependencies
+type load_all_plugin_i18n &>/dev/null && load_all_plugin_i18n
+type check_plugin_dependencies &>/dev/null && check_plugin_dependencies
+
 #------------------------------------------------------------------------------
 # GUM INSTALLATION
 #------------------------------------------------------------------------------
@@ -328,6 +343,11 @@ check_and_install_gum() {
 check_and_install_gum
 
 trap finish EXIT
+
+# Show interactive plugin selection if no plugin was pre-selected via CLI
+if ! $FULL_INSTALL; then
+    type show_plugin_selection_gum &>/dev/null && show_plugin_selection_gum
+fi
 
 #------------------------------------------------------------------------------
 # GRAPHIC BANNER (override for install.sh - uses i18n title)
@@ -1909,50 +1929,87 @@ if ! command -v tput &> /dev/null; then
 fi
 
 # Checking if specific arguments have been provided
+type run_hook &>/dev/null && run_hook "pre_install"
+
 if [ "$SHELL_CHOICE" = true ] || [ "$PACKAGES_CHOICE" = true ] || [ "$AI_TOOLS_CHOICE" = true ] || [ "$FONT_CHOICE" = true ] || [ "$XFCE_CHOICE" = true ] || [ "$PROOT_CHOICE" = true ] || [ "$X11_CHOICE" = true ]; then
     if $EXECUTE_INITIAL_CONFIG; then
+        type run_hook &>/dev/null && run_hook "pre_initial_config"
         initial_config
+        type run_hook &>/dev/null && run_hook "post_initial_config"
     fi
     if [ "$SHELL_CHOICE" = true ]; then
+        type run_hook &>/dev/null && run_hook "pre_shell"
         install_shell
+        type run_hook &>/dev/null && run_hook "post_shell"
     fi
     if [ "$PACKAGES_CHOICE" = true ]; then
+        type run_hook &>/dev/null && run_hook "pre_packages"
         install_packages
+        type run_hook &>/dev/null && run_hook "post_packages"
     fi
     if [ "$AI_TOOLS_CHOICE" = true ]; then
         install_ai_tools
     fi
     if [ "$FONT_CHOICE" = true ]; then
+        type run_hook &>/dev/null && run_hook "pre_font"
         install_font
+        type run_hook &>/dev/null && run_hook "post_font"
     fi
     if [ "$XFCE_CHOICE" = true ]; then
+        type run_hook &>/dev/null && run_hook "pre_xfce"
         install_xfce
+        type run_hook &>/dev/null && run_hook "post_xfce"
     fi
     if [ "$XFCE_CHOICE" = true ] && [ "$PROOT_CHOICE" = false ]; then
         install_xfce_scripts
     fi
     if [ "$PROOT_CHOICE" = true ]; then
+        type run_hook &>/dev/null && run_hook "pre_proot"
         install_proot
+        type run_hook &>/dev/null && run_hook "post_proot"
     fi
     if [ "$X11_CHOICE" = true ]; then
+        type run_hook &>/dev/null && run_hook "pre_x11"
         install_termux_x11
+        type run_hook &>/dev/null && run_hook "post_x11"
     fi
 else
     # Execute the complete installation if no specific argument is provided
     if $EXECUTE_INITIAL_CONFIG; then
+        type run_hook &>/dev/null && run_hook "pre_initial_config"
         initial_config
+        type run_hook &>/dev/null && run_hook "post_initial_config"
     fi
+    type run_hook &>/dev/null && run_hook "pre_shell"
     install_shell
+    type run_hook &>/dev/null && run_hook "post_shell"
     common_alias
+    type run_hook &>/dev/null && run_hook "pre_packages"
     install_packages
+    type run_hook &>/dev/null && run_hook "post_packages"
     install_ai_tools
+    type run_hook &>/dev/null && run_hook "pre_font"
     install_font
+    type run_hook &>/dev/null && run_hook "post_font"
+    type run_hook &>/dev/null && run_hook "pre_xfce"
     install_xfce
+    type run_hook &>/dev/null && run_hook "post_xfce"
+    type run_hook &>/dev/null && run_hook "pre_proot"
     install_proot
+    type run_hook &>/dev/null && run_hook "post_proot"
+    type run_hook &>/dev/null && run_hook "pre_x11"
     install_termux_x11
+    type run_hook &>/dev/null && run_hook "post_x11"
 fi
 
+# Execute all enabled plugins after core modules
+type execute_all_plugins &>/dev/null && execute_all_plugins
+
+type run_hook &>/dev/null && run_hook "post_install"
+
 # Cleaning and end message
+type run_hook &>/dev/null && run_hook "pre_cleanup"
+
 title_msg "❯ Saving the installation scripts"
 mkdir -p $OHMYTERMUX_CONFIG_DIR >/dev/null 2>&1
 mv -f xfce.sh proot.sh utils.sh install.sh $OHMYTERMUX_CONFIG_DIR/ >/dev/null 2>&1
@@ -1965,6 +2022,13 @@ fi
 if [ -d "$SCRIPT_DIR/lib" ]; then
     mv -f "$SCRIPT_DIR/lib" "$OHMYTERMUX_CONFIG_DIR/" >/dev/null 2>&1
 fi
+
+# Copy plugins to config directory
+if [ -d "$SCRIPT_DIR/plugins" ]; then
+    cp -rf "$SCRIPT_DIR/plugins" "$OHMYTERMUX_CONFIG_DIR/" >/dev/null 2>&1
+fi
+
+type run_hook &>/dev/null && run_hook "post_cleanup"
 
 # Rechargement du shell
 if $USE_GUM; then
