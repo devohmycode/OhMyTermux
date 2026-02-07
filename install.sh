@@ -46,6 +46,9 @@ PROOT_CHOICE=false
 # Termux-X11 installation
 X11_CHOICE=false
 
+# AI Tools installation
+AI_TOOLS_CHOICE=false
+
 # Full installation without interactions
 FULL_INSTALL=false
 
@@ -62,38 +65,13 @@ FISHRC="$HOME/.config/fish/config.fish"
 #------------------------------------------------------------------------------
 # BOOTSTRAP - Load i18n and lib systems
 #------------------------------------------------------------------------------
-_bootstrap_url="https://raw.githubusercontent.com/devohmycode/OhMyTermux/$BRANCH/lib/bootstrap.sh"
-_validate_script() { head -1 "$1" 2>/dev/null | grep -q "^#!/bin/bash"; }
-
+_loader_url="$OHMYTERMUX_REPO_URL/$BRANCH/lib/i18n_loader.sh"
 mkdir -p "$SCRIPT_DIR/lib"
-if [ ! -f "$SCRIPT_DIR/lib/bootstrap.sh" ] || ! _validate_script "$SCRIPT_DIR/lib/bootstrap.sh"; then
-    curl -fL -s -o "$SCRIPT_DIR/lib/bootstrap.sh" "$_bootstrap_url" 2>/dev/null
-    if ! _validate_script "$SCRIPT_DIR/lib/bootstrap.sh"; then
-        echo "Error: Failed to download bootstrap.sh from $_bootstrap_url" >&2
-        exit 1
-    fi
+if [ ! -f "$SCRIPT_DIR/lib/i18n_loader.sh" ]; then
+    curl -fL -s -o "$SCRIPT_DIR/lib/i18n_loader.sh" "$_loader_url" 2>/dev/null
 fi
-source "$SCRIPT_DIR/lib/bootstrap.sh"
-
-# Download and load i18n
-if [ ! -f "$SCRIPT_DIR/i18n/i18n.sh" ] || ! _validate_script "$SCRIPT_DIR/i18n/i18n.sh"; then
-    echo "Initializing i18n system..." >&2
-    if download_i18n_system && _validate_script "$SCRIPT_DIR/i18n/i18n.sh"; then
-        echo "i18n system downloaded and loaded successfully." >&2
-    else
-        echo "Error: Could not download i18n system. Using fallback messages." >&2
-        t() { echo "$1"; }
-        init_i18n() { return 0; }
-        MESSAGES_LOADED="fallback"
-    fi
-fi
-[ -f "$SCRIPT_DIR/i18n/i18n.sh" ] && _validate_script "$SCRIPT_DIR/i18n/i18n.sh" && source "$SCRIPT_DIR/i18n/i18n.sh"
-
-# Download and load lib
-if [ ! -f "$SCRIPT_DIR/lib/common.sh" ] || ! _validate_script "$SCRIPT_DIR/lib/common.sh"; then
-    download_lib_system
-fi
-source "$SCRIPT_DIR/lib/common.sh"
+I18N_DEFER_INIT=true
+source "$SCRIPT_DIR/lib/i18n_loader.sh"
 
 # Configure error handler keys for this script
 ERROR_MSG_KEY="MSG_ERROR_INSTALL"
@@ -101,6 +79,50 @@ ERROR_REFER_KEY="MSG_ERROR_REFER_MESSAGES"
 
 # Configure banner title (uses i18n key)
 BANNER_TITLE=""  # Will be set after i18n init via t()
+
+#------------------------------------------------------------------------------
+# UNINSTALL PROOT
+#------------------------------------------------------------------------------
+uninstall_proot() {
+    if [ "$MESSAGES_LOADED" != "true" ]; then
+        init_i18n "$OVERRIDE_LANG" >/dev/null 2>&1
+    fi
+
+    if ! command -v proot-distro &>/dev/null; then
+        echo "proot-distro is not installed." >&2
+        exit 1
+    fi
+
+    if [ ! -d "$PROOT_DEBIAN_ROOT" ]; then
+        echo "Debian PRoot is not installed." >&2
+        exit 1
+    fi
+
+    echo "This will remove the Debian PRoot installation and all its data."
+    printf "Are you sure? (y/N): "
+    read -r CONFIRM
+    if [[ ! "$CONFIRM" =~ ^[yYoO]$ ]]; then
+        echo "Uninstall cancelled."
+        exit 0
+    fi
+
+    # Remove proot-distro installation
+    proot-distro remove debian || {
+        echo "Error: Failed to remove Debian PRoot." >&2
+        exit 1
+    }
+
+    # Remove helper scripts
+    for CMD in prun zrun zrunhud cp2menu; do
+        rm -f "$PREFIX/bin/$CMD"
+    done
+
+    # Remove related desktop files
+    rm -f "$PREFIX/share/applications/cp2menu.desktop"
+    rm -f "$PREFIX/share/applications/kill_termux_x11.desktop"
+
+    echo "Debian PRoot has been successfully uninstalled."
+}
 
 #------------------------------------------------------------------------------
 # DISPLAY HELP
@@ -121,6 +143,7 @@ show_help() {
     echo "  --lang | -l       $(t MSG_OPT_LANG)"
     echo "  --shell | -sh     $(t MSG_OPT_SHELL)"
     echo "  --package | -pk   $(t MSG_OPT_PACKAGE)"
+    echo "  --ai | -ai        $(t MSG_OPT_AI)"
     echo "  --font | -f       $(t MSG_OPT_FONT)"
     echo "  --xfce | -x       $(t MSG_OPT_XFCE)"
     echo "  --proot | -pr     $(t MSG_OPT_PROOT)"
@@ -151,6 +174,11 @@ while [[ $# -gt 0 ]]; do
             ;;
         --package|-pk)
             PACKAGES_CHOICE=true
+            ONLY_GUM=false
+            shift
+            ;;
+        --ai|-ai)
+            AI_TOOLS_CHOICE=true
             ONLY_GUM=false
             shift
             ;;
@@ -201,6 +229,7 @@ while [[ $# -gt 0 ]]; do
             FULL_INSTALL=true
             SHELL_CHOICE=true
             PACKAGES_CHOICE=true
+            AI_TOOLS_CHOICE=true
             FONT_CHOICE=true
             XFCE_CHOICE=true
             PROOT_CHOICE=true
@@ -269,6 +298,7 @@ fi
 if $ONLY_GUM; then
     SHELL_CHOICE=true
     PACKAGES_CHOICE=true
+    AI_TOOLS_CHOICE=true
     FONT_CHOICE=true
     XFCE_CHOICE=true
     PROOT_CHOICE=true
@@ -327,7 +357,7 @@ show_banner() {
 # FILE BACKUP
 #------------------------------------------------------------------------------
 create_backups() {
-    local BACKUP_DIR="$HOME/.config/OhMyTermux/backups"
+    local BACKUP_DIR="$OHMYTERMUX_CONFIG_DIR/backups"
 
     # Create the backup directory
     execute_command "mkdir -p \"$BACKUP_DIR\"" "$(t MSG_PROGRESS_CREATE_BACKUP_DIR)"
@@ -354,11 +384,11 @@ create_backups() {
 #------------------------------------------------------------------------------
 common_alias() {
     # Create the centralized alias file
-    if [ ! -d "$HOME/.config/OhMyTermux" ]; then
-        execute_command "mkdir -p \"$HOME/.config/OhMyTermux\"" "$(t MSG_PROGRESS_CREATE_CONFIG_FOLDER)"
+    if [ ! -d "$OHMYTERMUX_CONFIG_DIR" ]; then
+        execute_command "mkdir -p \"$OHMYTERMUX_CONFIG_DIR\"" "$(t MSG_PROGRESS_CREATE_CONFIG_FOLDER)"
     fi
 
-    ALIASES_FILE="$HOME/.config/OhMyTermux/aliases"
+    ALIASES_FILE="$OHMYTERMUX_CONFIG_DIR/aliases"
 
     cat > "$ALIASES_FILE" << 'EOL'
 # Navigation
@@ -380,8 +410,8 @@ alias cm="chmod +x"
 # Configuration
 alias bashrc="nano $HOME/.bashrc"
 alias zshrc="nano $HOME/.zshrc"
-alias aliases="nano $HOME/.config/OhMyTermux/aliases"
-alias help="cat $HOME/.config/OhMyTermux/help.md"
+alias aliases="nano $OHMYTERMUX_CONFIG_DIR/aliases"
+alias help="cat $OHMYTERMUX_CONFIG_DIR/help.md"
 
 # Git
 alias g="git"
@@ -676,7 +706,7 @@ install_shell() {
                     success_msg "$(t MSG_OHMYZSH_ALREADY_INSTALLED)"
                 fi
 
-                execute_command "curl -fLo \"$ZSHRC\" https://raw.githubusercontent.com/devohmycode/OhMyTermux/$BRANCH/src/zshrc" "$(t MSG_DEFAULT_CONFIG_PROGRESS)" || error_msg "$(t MSG_ERROR_DEFAULT_CONFIG)"
+                execute_command "curl -fLo \"$ZSHRC\" $OHMYTERMUX_REPO_URL/$BRANCH/src/zshrc" "$(t MSG_DEFAULT_CONFIG_PROGRESS)" || error_msg "$(t MSG_ERROR_DEFAULT_CONFIG)"
 
                 if command -v zsh &> /dev/null; then
                     install_zsh_plugins
@@ -763,7 +793,7 @@ install_prompt() {
                     sed -i 's/ZSH_THEME="robbyrussell"/ZSH_THEME="powerlevel10k\/powerlevel10k"/' "$ZSHRC"
 
                     if gum_confirm "$(t MSG_CONFIRM_INSTALL_CUSTOM_PROMPT)"; then
-                        execute_command "curl -fLo \"$HOME/.p10k.zsh\" https://raw.githubusercontent.com/devohmycode/OhMyTermux/$BRANCH/src/p10k.zsh" "$(t MSG_INSTALL_CUSTOM_PROMPT)" || error_msg "$(t MSG_ERROR_CUSTOM_PROMPT)"
+                        execute_command "curl -fLo \"$HOME/.p10k.zsh\" $OHMYTERMUX_REPO_URL/$BRANCH/src/p10k.zsh" "$(t MSG_INSTALL_CUSTOM_PROMPT)" || error_msg "$(t MSG_ERROR_CUSTOM_PROMPT)"
                         echo -e "\n$(t MSG_CUSTOM_PROMPT_COMMENT)" >> "$ZSHRC"
                         echo "[[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh" >> "$ZSHRC"
                     else
@@ -784,7 +814,7 @@ install_prompt() {
                     tput cuu1
                     tput el
                     if [[ "$CHOICE" =~ ^[oO]$ ]]; then
-                        execute_command "curl -fLo \"$HOME/.p10k.zsh\" https://raw.githubusercontent.com/devohmycode/OhMyTermux/$BRANCH/src/p10k.zsh" "$(t MSG_INSTALL_CUSTOM_PROMPT)" || error_msg "$(t MSG_ERROR_CUSTOM_PROMPT)"
+                        execute_command "curl -fLo \"$HOME/.p10k.zsh\" $OHMYTERMUX_REPO_URL/$BRANCH/src/p10k.zsh" "$(t MSG_INSTALL_CUSTOM_PROMPT)" || error_msg "$(t MSG_ERROR_CUSTOM_PROMPT)"
                         echo -e "\n$(t MSG_CUSTOM_PROMPT_COMMENT)" >> "$ZSHRC"
                         echo "[[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh" >> "$ZSHRC"
                     else
@@ -1185,7 +1215,7 @@ update_zshrc() {
     echo -e "\n# Initialize oh-my-zsh\nsource \$ZSH/oh-my-zsh.sh" >> "$ZSHRC"
 
     # Sourcing defined aliases
-    echo -e "\n# Source defined aliases\n[ -f \"$HOME/.config/OhMyTermux/aliases\" ] && . \"$HOME/.config/OhMyTermux/aliases\"" >> "$ZSHRC"
+    echo -e "\n# Source defined aliases\n[ -f \"$OHMYTERMUX_CONFIG_DIR/aliases\" ] && . \"$OHMYTERMUX_CONFIG_DIR/aliases\"" >> "$ZSHRC"
 }
 
 #------------------------------------------------------------------------------
@@ -1290,8 +1320,8 @@ install_packages() {
             done
 
             # Reload aliases to make them available immediately
-            if [ -f "$HOME/.config/OhMyTermux/aliases" ]; then
-                source "$HOME/.config/OhMyTermux/aliases"
+            if [ -f "$OHMYTERMUX_CONFIG_DIR/aliases" ]; then
+                source "$OHMYTERMUX_CONFIG_DIR/aliases"
             fi
         else
             echo -e "${COLOR_BLUE}$(t MSG_NO_PACKAGE_SELECTED)${COLOR_RESET}"
@@ -1304,7 +1334,7 @@ install_packages() {
 #------------------------------------------------------------------------------
 add_aliases_to_rc() {
     local PACKAGE=$1
-    local ALIASES_FILE="$HOME/.config/OhMyTermux/aliases"
+    local ALIASES_FILE="$OHMYTERMUX_CONFIG_DIR/aliases"
 
     case $PACKAGE in
         eza)
@@ -1341,6 +1371,92 @@ alias show="nala show"
 EOL
             ;;
     esac
+}
+
+#------------------------------------------------------------------------------
+# INSTALLATION OF AI TOOLS
+#------------------------------------------------------------------------------
+install_ai_tools() {
+    if $AI_TOOLS_CHOICE; then
+        title_msg "$(t MSG_CONFIG_AI_TOOLS)"
+
+        # Define AI tools with their npm package names
+        local -A AI_TOOL_PACKAGES=(
+            ["Claude Code"]="@anthropic-ai/claude-code"
+            ["Codex"]="@openai/codex"
+            ["Gemini"]="@google/gemini-cli"
+            ["OpenCode"]="opencode-ai"
+            ["Amp"]="@sourcegraph/amp"
+        )
+        local AI_TOOL_NAMES=("Claude Code" "Codex" "Gemini" "OpenCode" "Amp")
+
+        if $USE_GUM; then
+            if $FULL_INSTALL; then
+                AI_TOOLS=("${AI_TOOL_NAMES[@]}")
+            else
+                IFS=$'\n' read -r -d '' -a AI_TOOLS < <(gum choose --no-limit \
+                    --selected.foreground="33" \
+                    --header.foreground="33" \
+                    --cursor.foreground="33" \
+                    --height=7 \
+                    --header="$(t MSG_SELECT_AI_TOOLS_GUM)" \
+                    "Claude Code" "Codex" "Gemini" "OpenCode" "Amp" \
+                    "$(t MSG_ALL_AI_TOOLS_INSTALL)")
+
+                if [[ " ${AI_TOOLS[*]} " == *" $(t MSG_ALL_AI_TOOLS_INSTALL) "* ]]; then
+                    AI_TOOLS=("${AI_TOOL_NAMES[@]}")
+                fi
+            fi
+        else
+            # Text mode
+            echo "$(t MSG_SELECT_AI_TOOLS_TEXT)"
+            echo
+            echo -e "${COLOR_BLUE}1) Claude Code${COLOR_RESET}"
+            echo -e "${COLOR_BLUE}2) Codex${COLOR_RESET}"
+            echo -e "${COLOR_BLUE}3) Gemini${COLOR_RESET}"
+            echo -e "${COLOR_BLUE}4) OpenCode${COLOR_RESET}"
+            echo -e "${COLOR_BLUE}5) Amp${COLOR_RESET}"
+            echo "6) $(t MSG_ALL_AI_TOOLS_INSTALL)"
+            echo
+            printf "${COLOR_GOLD}$(t MSG_ENTER_AI_TOOLS_NUMBERS_PROMPT) ${COLOR_RESET}"
+            tput setaf 3
+            read -r -e -p "" AI_TOOL_CHOICES
+            tput sgr0
+            tput cuu 11
+            tput ed
+
+            if [[ "$AI_TOOL_CHOICES" == *"6"* ]]; then
+                AI_TOOLS=("${AI_TOOL_NAMES[@]}")
+            else
+                AI_TOOLS=()
+                for CHOICE in $AI_TOOL_CHOICES; do
+                    case $CHOICE in
+                        1) AI_TOOLS+=("Claude Code") ;;
+                        2) AI_TOOLS+=("Codex") ;;
+                        3) AI_TOOLS+=("Gemini") ;;
+                        4) AI_TOOLS+=("OpenCode") ;;
+                        5) AI_TOOLS+=("Amp") ;;
+                    esac
+                done
+            fi
+        fi
+
+        # Install selected AI tools
+        if [ ${#AI_TOOLS[@]} -gt 0 ]; then
+            # Auto-install nodejs-lts if not already installed
+            if ! command -v node &>/dev/null; then
+                echo -e "${COLOR_BLUE}$(t MSG_AI_TOOLS_NODEJS_AUTO)${COLOR_RESET}"
+                execute_command "pkg install -y nodejs-lts" "$(t MSG_INSTALLATION_OF) nodejs-lts"
+            fi
+
+            for TOOL in "${AI_TOOLS[@]}"; do
+                local NPM_PACKAGE="${AI_TOOL_PACKAGES[$TOOL]}"
+                execute_command "npm install -g $NPM_PACKAGE" "$(t MSG_INSTALLATION_OF) $TOOL"
+            done
+        else
+            echo -e "${COLOR_BLUE}$(t MSG_NO_AI_TOOL_SELECTED)${COLOR_RESET}"
+        fi
+    fi
 }
 
 #------------------------------------------------------------------------------
@@ -1485,9 +1601,9 @@ install_xfce() {
         done
 
         if $USE_GUM; then
-            download_and_execute "https://raw.githubusercontent.com/devohmycode/OhMyTermux/$BRANCH/xfce.sh" "XFCE" --gum --version="$XFCE_VERSION" --browser="$BROWSER_CHOICE"
+            download_and_execute "$OHMYTERMUX_REPO_URL/$BRANCH/xfce.sh" "XFCE" --gum --version="$XFCE_VERSION" --browser="$BROWSER_CHOICE"
         else
-            download_and_execute "https://raw.githubusercontent.com/devohmycode/OhMyTermux/$BRANCH/xfce.sh" "XFCE" --version="$XFCE_VERSION" --browser="$BROWSER_CHOICE"
+            download_and_execute "$OHMYTERMUX_REPO_URL/$BRANCH/xfce.sh" "XFCE" --version="$XFCE_VERSION" --browser="$BROWSER_CHOICE"
         fi
     fi
 }
@@ -1593,25 +1709,25 @@ install_proot() {
     if $PROOT_CHOICE; then
         title_msg "$(t MSG_CONFIG_PROOT)"
 
-        execute_command "curl -O https://raw.githubusercontent.com/devohmycode/OhMyTermux/$BRANCH/proot.sh" "$(t MSG_DOWNLOAD_PROOT_SCRIPT)" || error_msg "$(t MSG_ERROR_DOWNLOAD_PROOT)"
+        execute_command "curl -O $OHMYTERMUX_REPO_URL/$BRANCH/proot.sh" "$(t MSG_DOWNLOAD_PROOT_SCRIPT)" || error_msg "$(t MSG_ERROR_DOWNLOAD_PROOT)"
         execute_command "chmod +x proot.sh" "$(t MSG_EXECUTE_PROOT_SCRIPT)"
 
         # If the identifiers are already provided
         if [ -n "$PROOT_USERNAME" ] && [ -n "$PROOT_PASSWORD" ]; then
             if $USE_GUM; then
                 execute_command "pkg install proot-distro -y" "$(t MSG_INSTALL_PROOT_DISTRO)"
-                download_and_execute "https://raw.githubusercontent.com/devohmycode/OhMyTermux/$BRANCH/proot.sh" "PRoot" --gum --username="$PROOT_USERNAME" --password="$PROOT_PASSWORD"
+                download_and_execute "$OHMYTERMUX_REPO_URL/$BRANCH/proot.sh" "PRoot" --gum --username="$PROOT_USERNAME" --password="$PROOT_PASSWORD"
                 install_utils
             else
                 execute_command "pkg install proot-distro -y" "$(t MSG_INSTALL_PROOT_DISTRO)"
-                download_and_execute "https://raw.githubusercontent.com/devohmycode/OhMyTermux/$BRANCH/proot.sh" "PRoot" --username="$PROOT_USERNAME" --password="$PROOT_PASSWORD"
+                download_and_execute "$OHMYTERMUX_REPO_URL/$BRANCH/proot.sh" "PRoot" --username="$PROOT_USERNAME" --password="$PROOT_PASSWORD"
                 install_utils
             fi
         else
             if $USE_GUM; then
                 if gum_confirm "$(t MSG_CONFIRM_INSTALL_PROOT)"; then
                     execute_command "pkg install proot-distro -y" "$(t MSG_INSTALL_PROOT_DISTRO)"
-                    download_and_execute "https://raw.githubusercontent.com/devohmycode/OhMyTermux/$BRANCH/proot.sh" "PRoot" --gum
+                    download_and_execute "$OHMYTERMUX_REPO_URL/$BRANCH/proot.sh" "PRoot" --gum
                     install_utils
                 fi
             else
@@ -1633,7 +1749,7 @@ install_proot() {
 # GETTING THE USERNAME
 #------------------------------------------------------------------------------
 get_username() {
-    local USER_DIR="$PREFIX/var/lib/proot-distro/installed-rootfs/debian/home"
+    local USER_DIR="$PROOT_DEBIAN_ROOT/home"
     local USERNAME
     USERNAME=$(ls -1 "$USER_DIR" 2>/dev/null | grep -v '^$' | head -n 1)
     if [ -z "$USERNAME" ]; then
@@ -1648,7 +1764,7 @@ get_username() {
 #------------------------------------------------------------------------------
 install_utils() {
     title_msg "$(t MSG_CONFIG_UTILS)"
-    download_and_execute "https://raw.githubusercontent.com/devohmycode/OhMyTermux/$BRANCH/utils.sh" "Utils"
+    download_and_execute "$OHMYTERMUX_REPO_URL/$BRANCH/utils.sh" "Utils"
 
     if ! USERNAME=$(get_username); then
         error_msg "$(t MSG_ERROR_GET_USERNAME)"
@@ -1793,7 +1909,7 @@ if ! command -v tput &> /dev/null; then
 fi
 
 # Checking if specific arguments have been provided
-if [ "$SHELL_CHOICE" = true ] || [ "$PACKAGES_CHOICE" = true ] || [ "$FONT_CHOICE" = true ] || [ "$XFCE_CHOICE" = true ] || [ "$PROOT_CHOICE" = true ] || [ "$X11_CHOICE" = true ]; then
+if [ "$SHELL_CHOICE" = true ] || [ "$PACKAGES_CHOICE" = true ] || [ "$AI_TOOLS_CHOICE" = true ] || [ "$FONT_CHOICE" = true ] || [ "$XFCE_CHOICE" = true ] || [ "$PROOT_CHOICE" = true ] || [ "$X11_CHOICE" = true ]; then
     if $EXECUTE_INITIAL_CONFIG; then
         initial_config
     fi
@@ -1802,6 +1918,9 @@ if [ "$SHELL_CHOICE" = true ] || [ "$PACKAGES_CHOICE" = true ] || [ "$FONT_CHOIC
     fi
     if [ "$PACKAGES_CHOICE" = true ]; then
         install_packages
+    fi
+    if [ "$AI_TOOLS_CHOICE" = true ]; then
+        install_ai_tools
     fi
     if [ "$FONT_CHOICE" = true ]; then
         install_font
@@ -1826,6 +1945,7 @@ else
     install_shell
     common_alias
     install_packages
+    install_ai_tools
     install_font
     install_xfce
     install_proot
@@ -1834,16 +1954,16 @@ fi
 
 # Cleaning and end message
 title_msg "❯ Saving the installation scripts"
-mkdir -p $HOME/.config/OhMyTermux >/dev/null 2>&1
-mv -f xfce.sh proot.sh utils.sh install.sh $HOME/.config/OhMyTermux/ >/dev/null 2>&1
+mkdir -p $OHMYTERMUX_CONFIG_DIR >/dev/null 2>&1
+mv -f xfce.sh proot.sh utils.sh install.sh $OHMYTERMUX_CONFIG_DIR/ >/dev/null 2>&1
 rm -f xfce.sh proot.sh utils.sh install.sh >/dev/null 2>&1
 
 # Clean up downloaded i18n and lib files if they were downloaded during installation
 if [ -d "$SCRIPT_DIR/i18n" ] && [ "$MESSAGES_LOADED" != "fallback" ]; then
-    mv -f "$SCRIPT_DIR/i18n" "$HOME/.config/OhMyTermux/" >/dev/null 2>&1
+    mv -f "$SCRIPT_DIR/i18n" "$OHMYTERMUX_CONFIG_DIR/" >/dev/null 2>&1
 fi
 if [ -d "$SCRIPT_DIR/lib" ]; then
-    mv -f "$SCRIPT_DIR/lib" "$HOME/.config/OhMyTermux/" >/dev/null 2>&1
+    mv -f "$SCRIPT_DIR/lib" "$OHMYTERMUX_CONFIG_DIR/" >/dev/null 2>&1
 fi
 
 # Rechargement du shell
