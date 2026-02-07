@@ -6,69 +6,11 @@
 # Determine the script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Function to download the i18n system if needed
-download_i18n_system() {
-    local BASE_URL="https://raw.githubusercontent.com/devohmycode/OhMyTermux/$BRANCH"
-    local TEMP_I18N_DIR="$SCRIPT_DIR/i18n"
-    local TEMP_MESSAGES_DIR="$TEMP_I18N_DIR/messages"
-
-    # Create temporary directories
-    mkdir -p "$TEMP_MESSAGES_DIR"
-
-    # List of i18n files to download
-    local I18N_FILES=(
-        "i18n/i18n.sh"
-        "i18n/locale_detect.sh"
-        "i18n/messages/en.sh"
-        "i18n/messages/fr.sh"
-    )
-
-    # Download each file
-    for FILE in "${I18N_FILES[@]}"; do
-        local URL="$BASE_URL/$FILE"
-        local LOCAL_PATH="$SCRIPT_DIR/$FILE"
-        local LOCAL_DIR=$(dirname "$LOCAL_PATH")
-
-        # Create the directory if needed
-        mkdir -p "$LOCAL_DIR"
-
-        # Download the file
-        if ! curl -L -s -o "$LOCAL_PATH" "$URL" 2>/dev/null; then
-            echo "Warning: Could not download $FILE from $URL" >&2
-            return 1
-        fi
-    done
-
-    return 0
-}
-
-# Load the internationalization library
-if [ -f "$SCRIPT_DIR/i18n/i18n.sh" ]; then
-    source "$SCRIPT_DIR/i18n/i18n.sh"
-else
-    echo "Initializing i18n system..." >&2
-    # Temporarily set BRANCH if not already set
-    if [ -z "$BRANCH" ]; then
-        BRANCH="main"
-    fi
-    # Download the i18n system
-    if download_i18n_system; then
-        source "$SCRIPT_DIR/i18n/i18n.sh"
-        echo "i18n system downloaded and loaded successfully." >&2
-    else
-        echo "Error: Could not download i18n system. Using fallback messages." >&2
-        # Define basic fallback functions
-        t() { echo "$1"; }
-        init_i18n() { return 0; }
-        MESSAGES_LOADED="fallback"
-    fi
-fi
-
 #------------------------------------------------------------------------------
 # GLOBAL VARIABLES
 #------------------------------------------------------------------------------
 # GitHub branch for downloads
-BRANCH="main"
+BRANCH="1.1.02"
 
 # Interactive interface with gum
 USE_GUM=false
@@ -104,6 +46,9 @@ PROOT_CHOICE=false
 # Termux-X11 installation
 X11_CHOICE=false
 
+# AI Tools installation
+AI_TOOLS_CHOICE=false
+
 # Full installation without interactions
 FULL_INSTALL=false
 
@@ -118,22 +63,69 @@ ZSHRC="$HOME/.zshrc"
 FISHRC="$HOME/.config/fish/config.fish"
 
 #------------------------------------------------------------------------------
-# DISPLAY COLORS
+# BOOTSTRAP - Load i18n and lib systems
 #------------------------------------------------------------------------------
-COLOR_BLUE='\033[38;5;33m'    # Information
-COLOR_GREEN='\033[38;5;82m'   # Success
-COLOR_GOLD='\033[38;5;220m'   # Warning
-COLOR_RED='\033[38;5;196m'    # Error
-COLOR_RESET='\033[0m'         # Reset
+_loader_url="$OHMYTERMUX_REPO_URL/$BRANCH/lib/i18n_loader.sh"
+mkdir -p "$SCRIPT_DIR/lib"
+if [ ! -f "$SCRIPT_DIR/lib/i18n_loader.sh" ]; then
+    curl -fL -s -o "$SCRIPT_DIR/lib/i18n_loader.sh" "$_loader_url" 2>/dev/null
+fi
+I18N_DEFER_INIT=true
+source "$SCRIPT_DIR/lib/i18n_loader.sh"
+
+# Configure error handler keys for this script
+ERROR_MSG_KEY="MSG_ERROR_INSTALL"
+ERROR_REFER_KEY="MSG_ERROR_REFER_MESSAGES"
+
+# Initialize plugin system (discover manifests, resolve order)
+type init_plugin_system &>/dev/null && init_plugin_system
+
+# Configure banner title (uses i18n key)
+BANNER_TITLE=""  # Will be set after i18n init via t()
 
 #------------------------------------------------------------------------------
-# REDIRECTION
+# UNINSTALL PROOT
 #------------------------------------------------------------------------------
-if [ "$VERBOSE" = false ]; then
-    REDIRECT="> /dev/null 2>&1"
-else
-    REDIRECT=""
-fi
+uninstall_proot() {
+    if [ "$MESSAGES_LOADED" != "true" ]; then
+        init_i18n "$OVERRIDE_LANG" >/dev/null 2>&1
+    fi
+
+    if ! command -v proot-distro &>/dev/null; then
+        echo "proot-distro is not installed." >&2
+        exit 1
+    fi
+
+    if [ ! -d "$PROOT_DEBIAN_ROOT" ]; then
+        echo "Debian PRoot is not installed." >&2
+        exit 1
+    fi
+
+    echo "This will remove the Debian PRoot installation and all its data."
+    printf "Are you sure? (y/N): "
+    read -r CONFIRM
+    if [[ ! "$CONFIRM" =~ ^[yYoO]$ ]]; then
+        echo "Uninstall cancelled."
+        exit 0
+    fi
+
+    # Remove proot-distro installation
+    proot-distro remove debian || {
+        echo "Error: Failed to remove Debian PRoot." >&2
+        exit 1
+    }
+
+    # Remove helper scripts
+    for CMD in prun zrun zrunhud cp2menu; do
+        rm -f "$PREFIX/bin/$CMD"
+    done
+
+    # Remove related desktop files
+    rm -f "$PREFIX/share/applications/cp2menu.desktop"
+    rm -f "$PREFIX/share/applications/kill_termux_x11.desktop"
+
+    echo "Debian PRoot has been successfully uninstalled."
+}
 
 #------------------------------------------------------------------------------
 # DISPLAY HELP
@@ -143,10 +135,10 @@ show_help() {
     if [ "$MESSAGES_LOADED" != "true" ]; then
         init_i18n "$OVERRIDE_LANG" >/dev/null 2>&1
     fi
-    
+
     clear
     echo "$(t MSG_HELP_TITLE)"
-    echo 
+    echo
     echo "$(t MSG_HELP_USAGE)"
     echo "$(t MSG_HELP_OPTIONS)"
     echo "  --gum | -g        $(t MSG_OPT_GUM)"
@@ -154,6 +146,7 @@ show_help() {
     echo "  --lang | -l       $(t MSG_OPT_LANG)"
     echo "  --shell | -sh     $(t MSG_OPT_SHELL)"
     echo "  --package | -pk   $(t MSG_OPT_PACKAGE)"
+    echo "  --ai | -ai        $(t MSG_OPT_AI)"
     echo "  --font | -f       $(t MSG_OPT_FONT)"
     echo "  --xfce | -x       $(t MSG_OPT_XFCE)"
     echo "  --proot | -pr     $(t MSG_OPT_PROOT)"
@@ -166,13 +159,20 @@ show_help() {
     echo "$(t MSG_HELP_EXAMPLES)"
     echo "  $(t MSG_EXAMPLE_GUM)"
     echo "  $(t MSG_EXAMPLE_FULL)"
+    type show_plugin_help &>/dev/null && show_plugin_help
 }
 
 #------------------------------------------------------------------------------
 # ARGUMENTS MANAGEMENT
 #------------------------------------------------------------------------------
-for ARG in "$@"; do
-    case $ARG in
+# Pre-parse plugin CLI flags
+if type parse_plugin_args &>/dev/null; then
+    parse_plugin_args "$@"
+    set -- "${REMAINING_ARGS[@]}"
+fi
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
         --gum|-g)
             USE_GUM=true
             shift
@@ -184,6 +184,11 @@ for ARG in "$@"; do
             ;;
         --package|-pk)
             PACKAGES_CHOICE=true
+            ONLY_GUM=false
+            shift
+            ;;
+        --ai|-ai)
+            AI_TOOLS_CHOICE=true
             ONLY_GUM=false
             shift
             ;;
@@ -234,12 +239,14 @@ for ARG in "$@"; do
             FULL_INSTALL=true
             SHELL_CHOICE=true
             PACKAGES_CHOICE=true
+            AI_TOOLS_CHOICE=true
             FONT_CHOICE=true
             XFCE_CHOICE=true
             PROOT_CHOICE=true
             X11_CHOICE=true
             SCRIPT_CHOICE=true
             ONLY_GUM=false
+            type enable_all_plugins &>/dev/null && enable_all_plugins
             shift
             ;;
         --help|-h)
@@ -249,14 +256,13 @@ for ARG in "$@"; do
         *)
             # Get the username and password if provided
             if [ -z "$PROOT_USERNAME" ]; then
-                PROOT_USERNAME="$ARG"
-                shift
+                PROOT_USERNAME="$1"
             elif [ -z "$PROOT_PASSWORD" ]; then
-                PROOT_PASSWORD="$ARG"
-                shift
+                PROOT_PASSWORD="$1"
             else
                 break
             fi
+            shift
             ;;
     esac
 done
@@ -271,7 +277,7 @@ if $FULL_INSTALL; then
             read -r PROOT_USERNAME
         fi
     fi
-    
+
     if [ -z "$PROOT_PASSWORD" ]; then
         while true; do
             if $USE_GUM; then
@@ -303,6 +309,7 @@ fi
 if $ONLY_GUM; then
     SHELL_CHOICE=true
     PACKAGES_CHOICE=true
+    AI_TOOLS_CHOICE=true
     FONT_CHOICE=true
     XFCE_CHOICE=true
     PROOT_CHOICE=true
@@ -315,209 +322,12 @@ if ! init_i18n "$OVERRIDE_LANG"; then
     echo "Warning: Problem during i18n system initialization. Using default messages." >&2
 fi
 
-#------------------------------------------------------------------------------
-# INFORMATION MESSAGES
-#------------------------------------------------------------------------------
-info_msg() {
-    if $USE_GUM; then
-        gum style "${1//$'\n'/ }" --foreground 33
-    else
-        echo -e "${COLOR_BLUE}$1${COLOR_RESET}"
-    fi
-}
+# Set banner title now that i18n is initialized
+BANNER_TITLE="$(t MSG_BANNER_TITLE)"
 
-#------------------------------------------------------------------------------
-# SUCCESS MESSAGES
-#------------------------------------------------------------------------------
-success_msg() {
-    if $USE_GUM; then
-        gum style "${1//$'\n'/ }" --foreground 82
-    else
-        echo -e "${COLOR_GREEN}$1${COLOR_RESET}"
-    fi
-}
-
-#------------------------------------------------------------------------------
-# ERROR MESSAGES
-#------------------------------------------------------------------------------
-error_msg() {
-    if $USE_GUM; then
-        gum style "${1//$'\n'/ }" --foreground 196
-    else
-        echo -e "${COLOR_RED}$1${COLOR_RESET}"
-    fi
-}
-
-#------------------------------------------------------------------------------
-# TITLE MESSAGES
-#------------------------------------------------------------------------------
-title_msg() {
-    if $USE_GUM; then
-        gum style "${1//$'\n'/ }" --foreground 220 --bold
-    else
-        echo -e "\n${COLOR_GOLD}\033[1m$1\033[0m${COLOR_RESET}"
-    fi
-}
-
-#------------------------------------------------------------------------------
-# SUBTITLE MESSAGES
-#------------------------------------------------------------------------------
-subtitle_msg() {
-    if $USE_GUM; then
-        gum style "${1//$'\n'/ }" --foreground 33 --bold
-    else
-        echo -e "\n${COLOR_BLUE}\033[1m$1\033[0m${COLOR_RESET}"
-    fi
-}
-
-#------------------------------------------------------------------------------
-# ERROR LOGGING
-#------------------------------------------------------------------------------
-log_error() {
-    local ERROR_MSG="$1"
-    local USERNAME=$(whoami)
-    local HOSTNAME=$(hostname)
-    local CWD=$(pwd)
-    echo "[$(date +'%d/%m/%Y %H:%M:%S')] ERREUR: $ERROR_MSG | Utilisateur: $USERNAME | Machine: $HOSTNAME | Répertoire: $CWD" >> "$HOME/.config/OhMyTermux/install.log"
-}
-
-#------------------------------------------------------------------------------
-# DYNAMIC DISPLAY OF COMMAND RESULTS
-#------------------------------------------------------------------------------
-execute_command() {
-    local COMMAND="$1"
-    local INFO_MSG="$2"
-    local SUCCESS_MSG="✓ $INFO_MSG"
-    local ERROR_MSG="✗ $INFO_MSG"
-    local ERROR_DETAILS
-
-    if $USE_GUM; then
-        if gum spin --spinner.foreground="33" --title.foreground="33" --spinner dot --title "$INFO_MSG" -- bash -c "$COMMAND $REDIRECT"; then
-            gum style "$SUCCESS_MSG" --foreground 82
-        else
-            ERROR_DETAILS="Command: $COMMAND, Redirect: $REDIRECT, Time: $(date +'%d/%m/%Y %H:%M:%S')"
-            gum style "$ERROR_MSG" --foreground 196
-            log_error "$ERROR_DETAILS"
-            return 1
-        fi
-    else
-        tput sc
-        info_msg "$INFO_MSG"
-        
-        if eval "$COMMAND $REDIRECT"; then
-            tput rc
-            tput el
-            success_msg "$SUCCESS_MSG"
-        else
-            tput rc
-            tput el
-            ERROR_DETAILS="Command: $COMMAND, Redirect: $REDIRECT, Time: $(date +'%d/%m/%Y %H:%M:%S')"
-            error_msg "$ERROR_MSG"
-            log_error "$ERROR_DETAILS"
-            return 1
-        fi
-    fi
-}
-
-#------------------------------------------------------------------------------
-# GUM CONFIRMATION
-#------------------------------------------------------------------------------
-gum_confirm() {
-    local PROMPT="$1"
-    if $FULL_INSTALL; then
-        return 0 
-    else
-        gum confirm --affirmative "$(t CONFIRM_YES)" --negative "$(t CONFIRM_NO)" --prompt.foreground="33" --selected.background="33" --selected.foreground="0" "$PROMPT"
-    fi
-}
-
-#------------------------------------------------------------------------------
-# GUM UNIQUE SELECTION
-#------------------------------------------------------------------------------
-gum_choose() {
-    local PROMPT="$1"
-    shift
-    local SELECTED=""
-    local OPTIONS=()
-    local HEIGHT=10
-
-    while [[ $# -gt 0 ]]; do
-        case $1 in
-            --selected=*)
-                SELECTED="${1#*=}"
-                ;;
-            --height=*)
-                HEIGHT="${1#*=}"
-                ;;
-            *)
-                OPTIONS+=("$1")
-                ;;
-        esac
-        shift
-    done
-
-    if $FULL_INSTALL; then
-        if [ -n "$SELECTED" ]; then
-            echo "$SELECTED"
-        else
-            # Return the first option by default
-            echo "${OPTIONS[0]}"
-        fi
-    else
-        gum choose --selected.foreground="33" --header.foreground="33" --cursor.foreground="33" --height="$HEIGHT" --header="$PROMPT" --selected="$SELECTED" "${OPTIONS[@]}"
-    fi
-}
-
-#------------------------------------------------------------------------------
-# GUM MULTIPLE SELECTION
-#------------------------------------------------------------------------------
-gum_choose_multi() {
-    local PROMPT="$1"
-    shift
-    local SELECTED=""
-    local OPTIONS=()
-    local HEIGHT=10
-
-    while [[ $# -gt 0 ]]; do
-        case $1 in
-            --selected=*)
-                SELECTED="${1#*=}"
-                ;;
-            --height=*)
-                HEIGHT="${1#*=}"
-                ;;
-            *)
-                OPTIONS+=("$1")
-                ;;
-        esac
-        shift
-    done
-
-    if $FULL_INSTALL; then
-        if [ -n "$SELECTED" ]; then
-            echo "$SELECTED"
-        else
-            echo "${OPTIONS[@]}"
-        fi
-    else
-        gum choose --no-limit --selected.foreground="33" --header.foreground="33" --cursor.foreground="33" --height="$HEIGHT" --header="$PROMPT" --selected="$SELECTED" "${OPTIONS[@]}"
-    fi
-}
-
-#------------------------------------------------------------------------------
-# TEXT MODE BANNER
-#------------------------------------------------------------------------------
-bash_banner() {
-    clear
-    local BANNER="
-╔════════════════════════════════════════╗
-║                                        ║
-║                OHMYTERMUX              ║
-║                                        ║
-╚════════════════════════════════════════╝"
-
-    echo -e "${COLOR_BLUE}${BANNER}${COLOR_RESET}\n"
-}
+# Load plugin translations and resolve dependencies
+type load_all_plugin_i18n &>/dev/null && load_all_plugin_i18n
+type check_plugin_dependencies &>/dev/null && check_plugin_dependencies
 
 #------------------------------------------------------------------------------
 # GUM INSTALLATION
@@ -532,33 +342,22 @@ check_and_install_gum() {
 
 check_and_install_gum
 
-#------------------------------------------------------------------------------
-# ERROR MANAGEMENT
-#------------------------------------------------------------------------------
-finish() {
-    local RET=$?
-    if [ ${RET} -ne 0 ] && [ ${RET} -ne 130 ]; then
-        echo
-        if $USE_GUM; then
-            gum style --foreground 196 "$(t MSG_ERROR_INSTALL)"
-        else
-            echo -e "${COLOR_RED}$(t MSG_ERROR_INSTALL)${COLOR_RESET}"
-        fi
-        echo -e "${COLOR_BLUE}$(t MSG_ERROR_REFER_MESSAGES)${COLOR_RESET}"
-    fi
-}
-
 trap finish EXIT
 
+# Show interactive plugin selection if no plugin was pre-selected via CLI
+if ! $FULL_INSTALL; then
+    type show_plugin_selection_gum &>/dev/null && show_plugin_selection_gum
+fi
+
 #------------------------------------------------------------------------------
-# GRAPHIC BANNER
+# GRAPHIC BANNER (override for install.sh - uses i18n title)
 #------------------------------------------------------------------------------
 show_banner() {
     # Initialiser le système i18n si pas encore fait
     if [ "$MESSAGES_LOADED" != "true" ]; then
         init_i18n "$OVERRIDE_LANG" >/dev/null 2>&1
     fi
-    
+
     clear
     if $USE_GUM; then
         gum style \
@@ -578,8 +377,8 @@ show_banner() {
 # FILE BACKUP
 #------------------------------------------------------------------------------
 create_backups() {
-    local BACKUP_DIR="$HOME/.config/OhMyTermux/backups"
-    
+    local BACKUP_DIR="$OHMYTERMUX_CONFIG_DIR/backups"
+
     # Create the backup directory
     execute_command "mkdir -p \"$BACKUP_DIR\"" "$(t MSG_PROGRESS_CREATE_BACKUP_DIR)"
 
@@ -605,11 +404,11 @@ create_backups() {
 #------------------------------------------------------------------------------
 common_alias() {
     # Create the centralized alias file
-    if [ ! -d "$HOME/.config/OhMyTermux" ]; then
-        execute_command "mkdir -p \"$HOME/.config/OhMyTermux\"" "$(t MSG_PROGRESS_CREATE_CONFIG_FOLDER)"
+    if [ ! -d "$OHMYTERMUX_CONFIG_DIR" ]; then
+        execute_command "mkdir -p \"$OHMYTERMUX_CONFIG_DIR\"" "$(t MSG_PROGRESS_CREATE_CONFIG_FOLDER)"
     fi
 
-    ALIASES_FILE="$HOME/.config/OhMyTermux/aliases"
+    ALIASES_FILE="$OHMYTERMUX_CONFIG_DIR/aliases"
 
     cat > "$ALIASES_FILE" << 'EOL'
 # Navigation
@@ -631,8 +430,8 @@ alias cm="chmod +x"
 # Configuration
 alias bashrc="nano $HOME/.bashrc"
 alias zshrc="nano $HOME/.zshrc"
-alias aliases="nano $HOME/.config/OhMyTermux/aliases"
-alias help="cat $HOME/.config/OhMyTermux/help.md"
+alias aliases="nano $OHMYTERMUX_CONFIG_DIR/aliases"
+alias help="cat $OHMYTERMUX_CONFIG_DIR/help.md"
 
 # Git
 alias g="git"
@@ -728,7 +527,7 @@ change_repo() {
         if gum_confirm "$(t MSG_CONFIRM_CHANGE_REPO)"; then
             termux-change-repo
         fi
-    else    
+    else
         printf "${COLOR_BLUE}$(t MSG_CONFIRM_CHANGE_REPO) (O/n) : ${COLOR_RESET}"
         read -r -e -p "" -i "o" CHOICE
         [[ "$CHOICE" =~ ^[oO]$ ]] && termux-change-repo
@@ -761,7 +560,7 @@ configure_termux() {
     # Backup existing files
     create_backups
     TERMUX_DIR="$HOME/.termux"
-    
+
     # Colors.properties configuration
     FILE_PATH="$TERMUX_DIR/colors.properties"
     if [ ! -f "$FILE_PATH" ]; then
@@ -788,12 +587,12 @@ color13=#9a5feb
 color14=#67fff0
 color15=#ffffff
 EOL
-        success_msg "✓ Argonaut theme installed"
+        success_msg "$(t MSG_SUCCESS_ARGONAUT)"
     fi
 
     # Common alias configuration
     common_alias
-    
+
     # Termux.properties configuration
     FILE_PATH="$TERMUX_DIR/termux.properties"
     if [ ! -f "$FILE_PATH" ]; then
@@ -927,7 +726,7 @@ install_shell() {
                     success_msg "$(t MSG_OHMYZSH_ALREADY_INSTALLED)"
                 fi
 
-                execute_command "curl -fLo \"$ZSHRC\" https://raw.githubusercontent.com/devohmycode/OhMyTermux/$BRANCH/src/zshrc" "$(t MSG_DEFAULT_CONFIG_PROGRESS)" || error_msg "$(t MSG_ERROR_DEFAULT_CONFIG)"
+                execute_command "curl -fLo \"$ZSHRC\" $OHMYTERMUX_REPO_URL/$BRANCH/src/zshrc" "$(t MSG_DEFAULT_CONFIG_PROGRESS)" || error_msg "$(t MSG_ERROR_DEFAULT_CONFIG)"
 
                 if command -v zsh &> /dev/null; then
                     install_zsh_plugins
@@ -957,7 +756,7 @@ install_shell() {
 install_prompt() {
     local PROMPT_CHOICE
     local CURRENT_SHELL="${SHELL_CHOICE:-zsh}"
-    
+
     if [ "$CURRENT_SHELL" = "bash" ]; then
         if $USE_GUM; then
             PROMPT_CHOICE=$(gum_choose "$(t MSG_CHOOSE_PROMPT_BASH)" --height=4 --selected="Oh-My-Posh" "Oh-My-Posh" "Starship")
@@ -973,7 +772,7 @@ install_prompt() {
             tput sgr0
             tput cuu 5
             tput ed
-            
+
             case $CHOICE in
                 1) PROMPT_CHOICE="Oh-My-Posh" ;;
                 2) PROMPT_CHOICE="Starship" ;;
@@ -996,7 +795,7 @@ install_prompt() {
             tput sgr0
             tput cuu 7
             tput ed
-            
+
             case $CHOICE in
                 1) PROMPT_CHOICE="PowerLevel10k" ;;
                 2) PROMPT_CHOICE="Oh-My-Posh" ;;
@@ -1014,7 +813,7 @@ install_prompt() {
                     sed -i 's/ZSH_THEME="robbyrussell"/ZSH_THEME="powerlevel10k\/powerlevel10k"/' "$ZSHRC"
 
                     if gum_confirm "$(t MSG_CONFIRM_INSTALL_CUSTOM_PROMPT)"; then
-                        execute_command "curl -fLo \"$HOME/.p10k.zsh\" https://raw.githubusercontent.com/devohmycode/OhMyTermux/$BRANCH/src/p10k.zsh" "$(t MSG_INSTALL_CUSTOM_PROMPT)" || error_msg "$(t MSG_ERROR_CUSTOM_PROMPT)"
+                        execute_command "curl -fLo \"$HOME/.p10k.zsh\" $OHMYTERMUX_REPO_URL/$BRANCH/src/p10k.zsh" "$(t MSG_INSTALL_CUSTOM_PROMPT)" || error_msg "$(t MSG_ERROR_CUSTOM_PROMPT)"
                         echo -e "\n$(t MSG_CUSTOM_PROMPT_COMMENT)" >> "$ZSHRC"
                         echo "[[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh" >> "$ZSHRC"
                     else
@@ -1035,7 +834,7 @@ install_prompt() {
                     tput cuu1
                     tput el
                     if [[ "$CHOICE" =~ ^[oO]$ ]]; then
-                        execute_command "curl -fLo \"$HOME/.p10k.zsh\" https://raw.githubusercontent.com/devohmycode/OhMyTermux/$BRANCH/src/p10k.zsh" "$(t MSG_INSTALL_CUSTOM_PROMPT)" || error_msg "$(t MSG_ERROR_CUSTOM_PROMPT)"
+                        execute_command "curl -fLo \"$HOME/.p10k.zsh\" $OHMYTERMUX_REPO_URL/$BRANCH/src/p10k.zsh" "$(t MSG_INSTALL_CUSTOM_PROMPT)" || error_msg "$(t MSG_ERROR_CUSTOM_PROMPT)"
                         echo -e "\n$(t MSG_CUSTOM_PROMPT_COMMENT)" >> "$ZSHRC"
                         echo "[[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh" >> "$ZSHRC"
                     else
@@ -1044,7 +843,7 @@ install_prompt() {
                 fi
             fi
             ;;
-            
+
         "Oh-My-Posh")
             execute_command "pkg install -y oh-my-posh" "$(t MSG_INSTALL_OHMYPOSH_PROGRESS)"
 
@@ -1052,7 +851,7 @@ install_prompt() {
             if [ ! -f "$HOME/.termux/font.ttf" ]; then
                 execute_command "curl -fLo \"$HOME/.termux/font.ttf\" --create-dirs https://raw.githubusercontent.com/termux/termux-styling/master/app/src/main/assets/fonts/DejaVu-Sans-Mono.ttf" "$(t MSG_INSTALL_NERD_FONT)"
             fi
-            
+
             # Retrieving the complete list of themes
             THEMES_DIR="/data/data/com.termux/files/usr/share/oh-my-posh/themes"
             if [ -d "$THEMES_DIR" ]; then
@@ -1126,7 +925,7 @@ EOF
             ;;
         "Starship")
             execute_command "pkg install -y starship" "$(t MSG_INSTALL_STARSHIP_PROGRESS)"
-            
+
             # Optional installation of a Nerd font
             if [ ! -f "$HOME/.termux/font.ttf" ]; then
                 execute_command "curl -fLo \"$HOME/.termux/font.ttf\" --create-dirs https://raw.githubusercontent.com/termux/termux-styling/master/app/src/main/assets/fonts/DejaVu-Sans-Mono.ttf" "$(t MSG_INSTALL_NERD_FONT)"
@@ -1176,7 +975,7 @@ EOF
                 tput sgr0
                 tput cuu 18
                 tput ed
-                
+
                 case $CHOICE in
                     1) PRESET="$(t PRESET_CUSTOM)" ;;
                     2) PRESET="$(t PRESET_NERD_FONT_SYMBOLS)" ;;
@@ -1200,7 +999,7 @@ EOF
                 "$(t PRESET_NERD_FONT_SYMBOLS)")
                     starship preset nerd-font-symbols -o "$HOME/.config/starship.toml"
                     ;;
-                "$(t PRESET_BRACKETED_SEGMENTS)") 
+                "$(t PRESET_BRACKETED_SEGMENTS)")
                     starship preset bracketed-segments -o "$HOME/.config/starship.toml"
                     ;;
                 "$(t PRESET_NO_EMPTY_ICONS)")
@@ -1436,7 +1235,7 @@ update_zshrc() {
     echo -e "\n# Initialize oh-my-zsh\nsource \$ZSH/oh-my-zsh.sh" >> "$ZSHRC"
 
     # Sourcing defined aliases
-    echo -e "\n# Source defined aliases\n[ -f \"$HOME/.config/OhMyTermux/aliases\" ] && . \"$HOME/.config/OhMyTermux/aliases\"" >> "$ZSHRC"
+    echo -e "\n# Source defined aliases\n[ -f \"$OHMYTERMUX_CONFIG_DIR/aliases\" ] && . \"$OHMYTERMUX_CONFIG_DIR/aliases\"" >> "$ZSHRC"
 }
 
 #------------------------------------------------------------------------------
@@ -1446,7 +1245,7 @@ install_packages() {
     if $PACKAGES_CHOICE; then
         title_msg "$(t MSG_CONFIG_PACKAGES)"
         local DEFAULT_PACKAGES=("nala" "eza" "bat" "lf" "fzf")
-        
+
         if $USE_GUM; then
             if $FULL_INSTALL; then
                 PACKAGES=("${DEFAULT_PACKAGES[@]}")
@@ -1490,14 +1289,14 @@ install_packages() {
             echo -e "${COLOR_BLUE}17) open-ssh${COLOR_RESET}"
             echo -e "${COLOR_BLUE}18) tsu${COLOR_RESET}"
             echo "19) $(t MSG_ALL_INSTALL)"
-            echo            
+            echo
             printf "${COLOR_GOLD}$(t MSG_ENTER_PACKAGE_NUMBERS_PROMPT) ${COLOR_RESET}"
             tput setaf 3
             read -r -e -p "" -i "1 2 5 6 7" PACKAGE_CHOICES
             tput sgr0
             tput cuu 23
             tput ed
-            
+
             if [[ "$PACKAGE_CHOICES" == *"19"* ]]; then
                 PACKAGES=("nala" "eza" "colorls" "lsd" "bat" "lf" "fzf" "glow" "tmux" "python" \
                         "nodejs" "nodejs-lts" "micro" "vim" "neovim" "lazygit" "open-ssh" "tsu")
@@ -1541,8 +1340,8 @@ install_packages() {
             done
 
             # Reload aliases to make them available immediately
-            if [ -f "$HOME/.config/OhMyTermux/aliases" ]; then
-                source "$HOME/.config/OhMyTermux/aliases"
+            if [ -f "$OHMYTERMUX_CONFIG_DIR/aliases" ]; then
+                source "$OHMYTERMUX_CONFIG_DIR/aliases"
             fi
         else
             echo -e "${COLOR_BLUE}$(t MSG_NO_PACKAGE_SELECTED)${COLOR_RESET}"
@@ -1555,8 +1354,8 @@ install_packages() {
 #------------------------------------------------------------------------------
 add_aliases_to_rc() {
     local PACKAGE=$1
-    local ALIASES_FILE="$HOME/.config/OhMyTermux/aliases"
-    
+    local ALIASES_FILE="$OHMYTERMUX_CONFIG_DIR/aliases"
+
     case $PACKAGE in
         eza)
             cat >> "$ALIASES_FILE" << 'EOL'
@@ -1592,6 +1391,92 @@ alias show="nala show"
 EOL
             ;;
     esac
+}
+
+#------------------------------------------------------------------------------
+# INSTALLATION OF AI TOOLS
+#------------------------------------------------------------------------------
+install_ai_tools() {
+    if $AI_TOOLS_CHOICE; then
+        title_msg "$(t MSG_CONFIG_AI_TOOLS)"
+
+        # Define AI tools with their npm package names
+        local -A AI_TOOL_PACKAGES=(
+            ["Claude Code"]="@anthropic-ai/claude-code"
+            ["Codex"]="@openai/codex"
+            ["Gemini"]="@google/gemini-cli"
+            ["OpenCode"]="opencode-ai"
+            ["Amp"]="@sourcegraph/amp"
+        )
+        local AI_TOOL_NAMES=("Claude Code" "Codex" "Gemini" "OpenCode" "Amp")
+
+        if $USE_GUM; then
+            if $FULL_INSTALL; then
+                AI_TOOLS=("${AI_TOOL_NAMES[@]}")
+            else
+                IFS=$'\n' read -r -d '' -a AI_TOOLS < <(gum choose --no-limit \
+                    --selected.foreground="33" \
+                    --header.foreground="33" \
+                    --cursor.foreground="33" \
+                    --height=7 \
+                    --header="$(t MSG_SELECT_AI_TOOLS_GUM)" \
+                    "Claude Code" "Codex" "Gemini" "OpenCode" "Amp" \
+                    "$(t MSG_ALL_AI_TOOLS_INSTALL)")
+
+                if [[ " ${AI_TOOLS[*]} " == *" $(t MSG_ALL_AI_TOOLS_INSTALL) "* ]]; then
+                    AI_TOOLS=("${AI_TOOL_NAMES[@]}")
+                fi
+            fi
+        else
+            # Text mode
+            echo "$(t MSG_SELECT_AI_TOOLS_TEXT)"
+            echo
+            echo -e "${COLOR_BLUE}1) Claude Code${COLOR_RESET}"
+            echo -e "${COLOR_BLUE}2) Codex${COLOR_RESET}"
+            echo -e "${COLOR_BLUE}3) Gemini${COLOR_RESET}"
+            echo -e "${COLOR_BLUE}4) OpenCode${COLOR_RESET}"
+            echo -e "${COLOR_BLUE}5) Amp${COLOR_RESET}"
+            echo "6) $(t MSG_ALL_AI_TOOLS_INSTALL)"
+            echo
+            printf "${COLOR_GOLD}$(t MSG_ENTER_AI_TOOLS_NUMBERS_PROMPT) ${COLOR_RESET}"
+            tput setaf 3
+            read -r -e -p "" AI_TOOL_CHOICES
+            tput sgr0
+            tput cuu 11
+            tput ed
+
+            if [[ "$AI_TOOL_CHOICES" == *"6"* ]]; then
+                AI_TOOLS=("${AI_TOOL_NAMES[@]}")
+            else
+                AI_TOOLS=()
+                for CHOICE in $AI_TOOL_CHOICES; do
+                    case $CHOICE in
+                        1) AI_TOOLS+=("Claude Code") ;;
+                        2) AI_TOOLS+=("Codex") ;;
+                        3) AI_TOOLS+=("Gemini") ;;
+                        4) AI_TOOLS+=("OpenCode") ;;
+                        5) AI_TOOLS+=("Amp") ;;
+                    esac
+                done
+            fi
+        fi
+
+        # Install selected AI tools
+        if [ ${#AI_TOOLS[@]} -gt 0 ]; then
+            # Auto-install nodejs-lts if not already installed
+            if ! command -v node &>/dev/null; then
+                echo -e "${COLOR_BLUE}$(t MSG_AI_TOOLS_NODEJS_AUTO)${COLOR_RESET}"
+                execute_command "pkg install -y nodejs-lts" "$(t MSG_INSTALLATION_OF) nodejs-lts"
+            fi
+
+            for TOOL in "${AI_TOOLS[@]}"; do
+                local NPM_PACKAGE="${AI_TOOL_PACKAGES[$TOOL]}"
+                execute_command "npm install -g $NPM_PACKAGE" "$(t MSG_INSTALLATION_OF) $TOOL"
+            done
+        else
+            echo -e "${COLOR_BLUE}$(t MSG_NO_AI_TOOL_SELECTED)${COLOR_RESET}"
+        fi
+    fi
 }
 
 #------------------------------------------------------------------------------
@@ -1659,20 +1544,20 @@ install_font() {
 install_xfce() {
     if $XFCE_CHOICE; then
         title_msg "$(t MSG_CONFIG_XFCE)"
-        local XFCE_VERSION="recommanded"
+        local XFCE_VERSION="recommended"
         local BROWSER_CHOICE="chromium"
 
         if ! $FULL_INSTALL; then
             if $USE_GUM; then
                 if gum_confirm "$(t MSG_CONFIRM_INSTALL_XFCE)"; then
                     # Choice of the version
-                    XFCE_VERSION=$(gum_choose "$(t MSG_SELECT_XFCE_VERSION)" --height=5 --selected="recommanded" \
+                    XFCE_VERSION=$(gum_choose "$(t MSG_SELECT_XFCE_VERSION)" --height=5 --selected="recommended" \
                     "minimal" \
-                    "recommanded" \
+                    "recommended" \
                     "customized")
 
                     # Sélection du navigateur (sauf pour la version minimale)
-                    if [ "$XFCE_VERSION" != "minimale" ]; then
+                    if [ "$XFCE_VERSION" != "minimal" ]; then
                         BROWSER_CHOICE=$(gum_choose "$(t MSG_SELECT_BROWSER)" --height=5 --selected="chromium" "chromium" "firefox" "none")
                     fi
                 else
@@ -1695,10 +1580,10 @@ install_xfce() {
                     tput cuu 7
                     tput ed
                     case $CHOICE in
-                        1) XFCE_VERSION="minimale" ;;
-                        2) XFCE_VERSION="recommanded" ;;
+                        1) XFCE_VERSION="minimal" ;;
+                        2) XFCE_VERSION="recommended" ;;
                         3) XFCE_VERSION="customized" ;;
-                        *) XFCE_VERSION="recommanded" ;;
+                        *) XFCE_VERSION="recommended" ;;
                     esac
 
                     if [ "$XFCE_VERSION" != "minimal" ]; then
@@ -1736,9 +1621,9 @@ install_xfce() {
         done
 
         if $USE_GUM; then
-            download_and_execute "https://raw.githubusercontent.com/devohmycode/OhMyTermux/$BRANCH/xfce.sh" "XFCE" --gum --version="$XFCE_VERSION" --browser="$BROWSER_CHOICE"
+            download_and_execute "$OHMYTERMUX_REPO_URL/$BRANCH/xfce.sh" "XFCE" --gum --version="$XFCE_VERSION" --browser="$BROWSER_CHOICE"
         else
-            download_and_execute "https://raw.githubusercontent.com/devohmycode/OhMyTermux/$BRANCH/xfce.sh" "XFCE" --version="$XFCE_VERSION" --browser="$BROWSER_CHOICE"
+            download_and_execute "$OHMYTERMUX_REPO_URL/$BRANCH/xfce.sh" "XFCE" --version="$XFCE_VERSION" --browser="$BROWSER_CHOICE"
         fi
     fi
 }
@@ -1748,7 +1633,7 @@ install_xfce() {
 #------------------------------------------------------------------------------
 install_xfce_scripts() {
     title_msg "$(t MSG_CONFIG_XFCE_SCRIPTS)"
-    
+
     # Installation of the start script
     cat <<'EOF' > start
 #!/bin/bash
@@ -1843,29 +1728,29 @@ EOF
 install_proot() {
     if $PROOT_CHOICE; then
         title_msg "$(t MSG_CONFIG_PROOT)"
-        
-        execute_command "curl -O https://raw.githubusercontent.com/devohmycode/OhMyTermux/$BRANCH/proot.sh" "$(t MSG_DOWNLOAD_PROOT_SCRIPT)" || error_msg "$(t MSG_ERROR_DOWNLOAD_PROOT)"
+
+        execute_command "curl -O $OHMYTERMUX_REPO_URL/$BRANCH/proot.sh" "$(t MSG_DOWNLOAD_PROOT_SCRIPT)" || error_msg "$(t MSG_ERROR_DOWNLOAD_PROOT)"
         execute_command "chmod +x proot.sh" "$(t MSG_EXECUTE_PROOT_SCRIPT)"
-        
+
         # If the identifiers are already provided
         if [ -n "$PROOT_USERNAME" ] && [ -n "$PROOT_PASSWORD" ]; then
             if $USE_GUM; then
                 execute_command "pkg install proot-distro -y" "$(t MSG_INSTALL_PROOT_DISTRO)"
-                download_and_execute "https://raw.githubusercontent.com/devohmycode/OhMyTermux/$BRANCH/proot.sh" "PRoot" --gum --username="$PROOT_USERNAME" --password="$PROOT_PASSWORD"
+                download_and_execute "$OHMYTERMUX_REPO_URL/$BRANCH/proot.sh" "PRoot" --gum --username="$PROOT_USERNAME" --password="$PROOT_PASSWORD"
                 install_utils
             else
                 execute_command "pkg install proot-distro -y" "$(t MSG_INSTALL_PROOT_DISTRO)"
-                download_and_execute "https://raw.githubusercontent.com/devohmycode/OhMyTermux/$BRANCH/proot.sh" "PRoot" --username="$PROOT_USERNAME" --password="$PROOT_PASSWORD"
+                download_and_execute "$OHMYTERMUX_REPO_URL/$BRANCH/proot.sh" "PRoot" --username="$PROOT_USERNAME" --password="$PROOT_PASSWORD"
                 install_utils
             fi
         else
             if $USE_GUM; then
                 if gum_confirm "$(t MSG_CONFIRM_INSTALL_PROOT)"; then
                     execute_command "pkg install proot-distro -y" "$(t MSG_INSTALL_PROOT_DISTRO)"
-                    download_and_execute "https://raw.githubusercontent.com/devohmycode/OhMyTermux/$BRANCH/proot.sh" "PRoot" --gum
+                    download_and_execute "$OHMYTERMUX_REPO_URL/$BRANCH/proot.sh" "PRoot" --gum
                     install_utils
                 fi
-            else    
+            else
                 printf "${COLOR_BLUE}$(t MSG_CONFIRM_INSTALL_PROOT) (O/n) : ${COLOR_RESET}"
                 read -r -e -p "" -i "o" CHOICE
                 tput cuu1
@@ -1884,7 +1769,7 @@ install_proot() {
 # GETTING THE USERNAME
 #------------------------------------------------------------------------------
 get_username() {
-    local USER_DIR="$PREFIX/var/lib/proot-distro/installed-rootfs/debian/home"
+    local USER_DIR="$PROOT_DEBIAN_ROOT/home"
     local USERNAME
     USERNAME=$(ls -1 "$USER_DIR" 2>/dev/null | grep -v '^$' | head -n 1)
     if [ -z "$USERNAME" ]; then
@@ -1899,7 +1784,7 @@ get_username() {
 #------------------------------------------------------------------------------
 install_utils() {
     title_msg "$(t MSG_CONFIG_UTILS)"
-    download_and_execute "https://raw.githubusercontent.com/devohmycode/OhMyTermux/$BRANCH/utils.sh" "Utils"
+    download_and_execute "$OHMYTERMUX_REPO_URL/$BRANCH/utils.sh" "Utils"
 
     if ! USERNAME=$(get_username); then
         error_msg "$(t MSG_ERROR_GET_USERNAME)"
@@ -1958,7 +1843,7 @@ EOL
         cat "$TMP_FILE" >> "$BASHRC"
         success_msg "$(t MSG_CONFIG_BASH_TERMUX)"
     else
-        touch "$BASHRC" 
+        touch "$BASHRC"
         cat "$TMP_FILE" >> "$BASHRC"
         success_msg "$(t MSG_CREATE_CONFIG_BASH_TERMUX)"
     fi
@@ -1980,7 +1865,7 @@ install_termux_x11() {
     if $X11_CHOICE; then
         title_msg "$(t MSG_CONFIG_TERMUX_X11)"
         local FILE_PATH="$HOME/.termux/termux.properties"
-    
+
         if [ ! -f "$FILE_PATH" ]; then
             mkdir -p "$HOME/.termux"
             cat <<EOL > "$FILE_PATH"
@@ -2044,55 +1929,106 @@ if ! command -v tput &> /dev/null; then
 fi
 
 # Checking if specific arguments have been provided
-if [ "$SHELL_CHOICE" = true ] || [ "$PACKAGES_CHOICE" = true ] || [ "$FONT_CHOICE" = true ] || [ "$XFCE_CHOICE" = true ] || [ "$PROOT_CHOICE" = true ] || [ "$X11_CHOICE" = true ]; then
+type run_hook &>/dev/null && run_hook "pre_install"
+
+if [ "$SHELL_CHOICE" = true ] || [ "$PACKAGES_CHOICE" = true ] || [ "$AI_TOOLS_CHOICE" = true ] || [ "$FONT_CHOICE" = true ] || [ "$XFCE_CHOICE" = true ] || [ "$PROOT_CHOICE" = true ] || [ "$X11_CHOICE" = true ]; then
     if $EXECUTE_INITIAL_CONFIG; then
+        type run_hook &>/dev/null && run_hook "pre_initial_config"
         initial_config
+        type run_hook &>/dev/null && run_hook "post_initial_config"
     fi
     if [ "$SHELL_CHOICE" = true ]; then
+        type run_hook &>/dev/null && run_hook "pre_shell"
         install_shell
+        type run_hook &>/dev/null && run_hook "post_shell"
     fi
     if [ "$PACKAGES_CHOICE" = true ]; then
+        type run_hook &>/dev/null && run_hook "pre_packages"
         install_packages
+        type run_hook &>/dev/null && run_hook "post_packages"
+    fi
+    if [ "$AI_TOOLS_CHOICE" = true ]; then
+        install_ai_tools
     fi
     if [ "$FONT_CHOICE" = true ]; then
+        type run_hook &>/dev/null && run_hook "pre_font"
         install_font
+        type run_hook &>/dev/null && run_hook "post_font"
     fi
     if [ "$XFCE_CHOICE" = true ]; then
+        type run_hook &>/dev/null && run_hook "pre_xfce"
         install_xfce
+        type run_hook &>/dev/null && run_hook "post_xfce"
     fi
     if [ "$XFCE_CHOICE" = true ] && [ "$PROOT_CHOICE" = false ]; then
         install_xfce_scripts
     fi
     if [ "$PROOT_CHOICE" = true ]; then
+        type run_hook &>/dev/null && run_hook "pre_proot"
         install_proot
+        type run_hook &>/dev/null && run_hook "post_proot"
     fi
     if [ "$X11_CHOICE" = true ]; then
+        type run_hook &>/dev/null && run_hook "pre_x11"
         install_termux_x11
+        type run_hook &>/dev/null && run_hook "post_x11"
     fi
 else
     # Execute the complete installation if no specific argument is provided
     if $EXECUTE_INITIAL_CONFIG; then
+        type run_hook &>/dev/null && run_hook "pre_initial_config"
         initial_config
+        type run_hook &>/dev/null && run_hook "post_initial_config"
     fi
+    type run_hook &>/dev/null && run_hook "pre_shell"
     install_shell
+    type run_hook &>/dev/null && run_hook "post_shell"
     common_alias
+    type run_hook &>/dev/null && run_hook "pre_packages"
     install_packages
+    type run_hook &>/dev/null && run_hook "post_packages"
+    install_ai_tools
+    type run_hook &>/dev/null && run_hook "pre_font"
     install_font
+    type run_hook &>/dev/null && run_hook "post_font"
+    type run_hook &>/dev/null && run_hook "pre_xfce"
     install_xfce
+    type run_hook &>/dev/null && run_hook "post_xfce"
+    type run_hook &>/dev/null && run_hook "pre_proot"
     install_proot
+    type run_hook &>/dev/null && run_hook "post_proot"
+    type run_hook &>/dev/null && run_hook "pre_x11"
     install_termux_x11
+    type run_hook &>/dev/null && run_hook "post_x11"
 fi
+
+# Execute all enabled plugins after core modules
+type execute_all_plugins &>/dev/null && execute_all_plugins
+
+type run_hook &>/dev/null && run_hook "post_install"
 
 # Cleaning and end message
+type run_hook &>/dev/null && run_hook "pre_cleanup"
+
 title_msg "❯ Saving the installation scripts"
-mkdir -p $HOME/.config/OhMyTermux >/dev/null 2>&1
-mv -f xfce.sh proot.sh utils.sh install.sh $HOME/.config/OhMyTermux/ >/dev/null 2>&1
+mkdir -p $OHMYTERMUX_CONFIG_DIR >/dev/null 2>&1
+mv -f xfce.sh proot.sh utils.sh install.sh $OHMYTERMUX_CONFIG_DIR/ >/dev/null 2>&1
 rm -f xfce.sh proot.sh utils.sh install.sh >/dev/null 2>&1
 
-# Clean up downloaded i18n files if they were downloaded during installation
+# Clean up downloaded i18n and lib files if they were downloaded during installation
 if [ -d "$SCRIPT_DIR/i18n" ] && [ "$MESSAGES_LOADED" != "fallback" ]; then
-    mv -f "$SCRIPT_DIR/i18n" "$HOME/.config/OhMyTermux/" >/dev/null 2>&1
+    mv -f "$SCRIPT_DIR/i18n" "$OHMYTERMUX_CONFIG_DIR/" >/dev/null 2>&1
 fi
+if [ -d "$SCRIPT_DIR/lib" ]; then
+    mv -f "$SCRIPT_DIR/lib" "$OHMYTERMUX_CONFIG_DIR/" >/dev/null 2>&1
+fi
+
+# Copy plugins to config directory
+if [ -d "$SCRIPT_DIR/plugins" ]; then
+    cp -rf "$SCRIPT_DIR/plugins" "$OHMYTERMUX_CONFIG_DIR/" >/dev/null 2>&1
+fi
+
+type run_hook &>/dev/null && run_hook "post_cleanup"
 
 # Rechargement du shell
 if $USE_GUM; then

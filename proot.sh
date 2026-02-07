@@ -4,7 +4,7 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # GitHub branch for downloads
-BRANCH="main"
+BRANCH="1.1.02"
 
 # Language override variable
 OVERRIDE_LANG=""
@@ -44,83 +44,19 @@ for ARG in "$@"; do
     esac
 done
 
-# Function to download the i18n system if necessary
-download_i18n_system() {
-    local BASE_URL="https://raw.githubusercontent.com/devohmycode/OhMyTermux/$BRANCH"
-    local TEMP_I18N_DIR="$SCRIPT_DIR/i18n"
-    local TEMP_MESSAGES_DIR="$TEMP_I18N_DIR/messages"
-
-    # Create temporary directories
-    mkdir -p "$TEMP_MESSAGES_DIR"
-
-    # List of i18n files to download
-    local I18N_FILES=(
-        "i18n/i18n.sh"
-        "i18n/locale_detect.sh"
-        "i18n/messages/en.sh"
-        "i18n/messages/fr.sh"
-    )
-
-    # Download each file
-    for FILE in "${I18N_FILES[@]}"; do
-        local URL="$BASE_URL/$FILE"
-        local LOCAL_PATH="$SCRIPT_DIR/$FILE"
-        local LOCAL_DIR=$(dirname "$LOCAL_PATH")
-
-        # Create the directory if necessary
-        mkdir -p "$LOCAL_DIR"
-
-        # Download the file
-        if ! curl -L -s -o "$LOCAL_PATH" "$URL" 2>/dev/null; then
-            echo "Warning: Could not download $FILE from $URL" >&2
-            return 1
-        fi
-    done
-
-    return 0
-}
-
-if [ -f "$SCRIPT_DIR/i18n/i18n.sh" ]; then
-    source "$SCRIPT_DIR/i18n/i18n.sh"
-    init_i18n "$OVERRIDE_LANG"
-else
-    echo "Initializing i18n system..." >&2
-    # Temporarily set BRANCH if not already set
-    if [ -z "$BRANCH" ]; then
-        BRANCH="main"
-    fi
-    # Download the i18n system
-    if download_i18n_system; then
-        source "$SCRIPT_DIR/i18n/i18n.sh"
-        init_i18n "$OVERRIDE_LANG"
-        echo "i18n system downloaded and loaded successfully." >&2
-    else
-        echo "Error: Could not download i18n system. Using fallback messages." >&2
-        # Define basic fallback functions
-        t() { echo "$1"; }
-        init_i18n() { return 0; }
-        MESSAGES_LOADED="fallback"
-    fi
+#------------------------------------------------------------------------------
+# BOOTSTRAP - Load i18n and lib systems
+#------------------------------------------------------------------------------
+_loader_url="https://raw.githubusercontent.com/devohmycode/OhMyTermux/$BRANCH/lib/i18n_loader.sh"
+mkdir -p "$SCRIPT_DIR/lib"
+if [ ! -f "$SCRIPT_DIR/lib/i18n_loader.sh" ]; then
+    curl -fL -s -o "$SCRIPT_DIR/lib/i18n_loader.sh" "$_loader_url" 2>/dev/null
 fi
+source "$SCRIPT_DIR/lib/i18n_loader.sh"
 
-
-#------------------------------------------------------------------------------
-# DISPLAY COLORS
-#------------------------------------------------------------------------------
-COLOR_BLUE='\033[38;5;33m'    # Information
-COLOR_GREEN='\033[38;5;82m'   # Success
-COLOR_GOLD='\033[38;5;220m'   # Warning
-COLOR_RED='\033[38;5;196m'    # Error
-COLOR_RESET='\033[0m'         # Reset
-
-#------------------------------------------------------------------------------
-# REDIRECTION
-#------------------------------------------------------------------------------
-if [ "$VERBOSE" = false ]; then
-    REDIRECT=">/dev/null 2>&1"
-else
-    REDIRECT=""
-fi
+# Configure error handler keys for this script
+ERROR_MSG_KEY="MSG_PROOT_ERROR_INSTALL"
+ERROR_REFER_KEY="MSG_PROOT_ERROR_REFER"
 
 #------------------------------------------------------------------------------
 # DISPLAY HELP
@@ -128,7 +64,7 @@ fi
 show_help() {
     clear
     echo "$(t "MSG_PROOT_HELP_TITLE")"
-    echo 
+    echo
     echo "$(t "MSG_PROOT_HELP_USAGE")"
     echo "$(t "MSG_PROOT_HELP_OPTIONS")"
     echo "  --gum | -g     $(t "MSG_PROOT_HELP_GUM")"
@@ -176,110 +112,6 @@ for ARG in "$@"; do
 done
 
 #------------------------------------------------------------------------------
-# INFORMATION MESSAGES
-#------------------------------------------------------------------------------
-info_msg() {
-    if $USE_GUM; then
-        gum style "${1//$'\n'/ }" --foreground 33
-    else
-        echo -e "${COLOR_BLUE}$1${COLOR_RESET}"
-    fi
-}
-
-#------------------------------------------------------------------------------
-# SUCCESS MESSAGES
-#------------------------------------------------------------------------------
-success_msg() {
-    if $USE_GUM; then
-        gum style "${1//$'\n'/ }" --foreground 82
-    else
-        echo -e "${COLOR_GREEN}$1${COLOR_RESET}"
-    fi
-}
-
-#------------------------------------------------------------------------------
-# ERROR MESSAGES
-#------------------------------------------------------------------------------
-error_msg() {
-    if $USE_GUM; then
-        gum style "${1//$'\n'/ }" --foreground 196
-    else
-        echo -e "${COLOR_RED}$1${COLOR_RESET}"
-    fi
-}
-
-#------------------------------------------------------------------------------
-# TITLE MESSAGES
-#------------------------------------------------------------------------------
-title_msg() {
-    if $USE_GUM; then
-        gum style "${1//$'\n'/ }" --foreground 220 --bold
-    else
-        echo -e "\n${COLOR_GOLD}\033[1m$1\033[0m${COLOR_RESET}"
-    fi
-}
-
-#------------------------------------------------------------------------------
-# SUBTITLE MESSAGES
-#------------------------------------------------------------------------------
-subtitle_msg() {
-    if $USE_GUM; then
-        gum style "${1//$'\n'/ }" --foreground 33 --bold
-    else
-        echo -e "\n${COLOR_BLUE}\033[1m$1\033[0m${COLOR_RESET}"
-    fi
-}
-
-#------------------------------------------------------------------------------
-# ERROR LOGGING
-#------------------------------------------------------------------------------
-log_error() {
-    local ERROR_MSG="$1"
-    local USERNAME=$(whoami)
-    local HOSTNAME=$(hostname)
-    local CWD=$(pwd)
-    echo "[$(date +'%d/%m/%Y %H:%M:%S')] ERROR: $ERROR_MSG | User: $USERNAME | Machine: $HOSTNAME | Directory: $CWD" >> "$HOME/.config/OhMyTermux/install.log"
-}
-
-#------------------------------------------------------------------------------
-# DYNAMIC DISPLAY OF COMMAND RESULTS
-#------------------------------------------------------------------------------
-execute_command() {
-    local COMMAND="$1"
-    local INFO_MSG="$2"
-    local SUCCESS_MSG="✓ $INFO_MSG"
-    local ERROR_MSG="✗ $INFO_MSG"
-    local ERROR_DETAILS
-
-    if $USE_GUM; then
-        if gum spin --spinner.foreground="33" --title.foreground="33" --spinner dot --title "$INFO_MSG" -- bash -c "$COMMAND $REDIRECT"; then
-            gum style "$SUCCESS_MSG" --foreground 82
-        else
-            ERROR_DETAILS="Command: $COMMAND, Redirect: $REDIRECT, Time: $(date +'%d/%m/%Y %H:%M:%S')"
-            gum style "$ERROR_MSG" --foreground 196
-            log_error "$ERROR_DETAILS"
-            return 1
-        fi
-    else
-        tput sc
-        info_msg "$INFO_MSG"
-        
-        if eval "$COMMAND $REDIRECT"; then
-            tput rc
-            tput el
-            success_msg "$SUCCESS_MSG"
-        else
-            tput rc
-            tput el
-            ERROR_DETAILS="Command: $COMMAND, Redirect: $REDIRECT, Time: $(date +'%d/%m/%Y %H:%M:%S')"
-            error_msg "$ERROR_MSG"
-            log_error "$ERROR_DETAILS"
-            return 1
-        fi
-    fi
-}
-
-#------------------------------------------------------------------------------
 # DEPENDENCIES CHECK
 #------------------------------------------------------------------------------
 check_dependencies() {
@@ -293,57 +125,6 @@ check_dependencies() {
     if ! command -v proot-distro &> /dev/null; then
         error_msg "Please install proot-distro before continuing."
         exit 1
-    fi
-}
-
-#------------------------------------------------------------------------------
-# TEXT BANNER
-#------------------------------------------------------------------------------
-bash_banner() {
-    clear
-    local BANNER="
-╔════════════════════════════════════════╗
-║                                        ║
-║               OHMYTERMUX               ║
-║                                        ║
-╚════════════════════════════════════════╝"
-
-    echo -e "${COLOR_BLUE}${BANNER}${COLOR_RESET}\n"
-}
-
-
-#------------------------------------------------------------------------------
-# GRAPHIC BANNER
-#------------------------------------------------------------------------------
-show_banner() {
-    clear
-    if $USE_GUM; then
-        gum style \
-            --foreground 33 \
-            --border-foreground 33 \
-            --border double \
-            --align center \
-            --width 42 \
-            --margin "1 1 1 0" \
-            "" "OHMYTERMUX" ""
-    else
-        bash_banner
-    fi
-}
-
-#------------------------------------------------------------------------------
-# ERROR MANAGEMENT
-#------------------------------------------------------------------------------
-finish() {
-    local RET=$?
-    if [ ${RET} -ne 0 ] && [ ${RET} -ne 130 ]; then
-        echo
-        if [ "$USE_GUM" = true ]; then
-            gum style --foreground 196 "$(t "MSG_PROOT_ERROR_INSTALL")"
-        else
-            echo -e "${COLOR_RED}$(t "MSG_PROOT_ERROR_INSTALL")${COLOR_RESET}"
-        fi
-        echo -e "${COLOR_BLUE}$(t "MSG_PROOT_ERROR_REFER")${COLOR_RESET}"
     fi
 }
 
@@ -368,7 +149,7 @@ create_user_proot() {
         proot-distro login debian --shared-tmp -- env DISPLAY=:1.0 groupadd storage
         proot-distro login debian --shared-tmp -- env DISPLAY=:1.0 groupadd wheel
         proot-distro login debian --shared-tmp -- env DISPLAY=:1.0 useradd -m -g users -G wheel,audio,video,storage -s /bin/bash '$USERNAME'
-        echo '$USERNAME:$PASSWORD' | proot-distro login debian --shared-tmp -- env DISPLAY=:1.0 chpasswd
+        proot-distro login debian --shared-tmp -- env DISPLAY=:1.0 chpasswd <<< '$USERNAME:$PASSWORD'
     " "User creation"
 }
 
@@ -381,31 +162,86 @@ configure_user_rights() {
         proot-distro login debian --shared-tmp -- env DISPLAY=:1.0 usermod -aG sudo '$USERNAME'
 
         # Create sudoers.d file for user
-        echo '$USERNAME ALL=(ALL) NOPASSWD: ALL' > '$PREFIX/var/lib/proot-distro/installed-rootfs/debian/etc/sudoers.d/$USERNAME'
-        chmod 0440 '$PREFIX/var/lib/proot-distro/installed-rootfs/debian/etc/sudoers.d/$USERNAME'
+        echo '$USERNAME ALL=(ALL) NOPASSWD: ALL' > '$PROOT_DEBIAN_ROOT/etc/sudoers.d/$USERNAME'
+        chmod 0440 '$PROOT_DEBIAN_ROOT/etc/sudoers.d/$USERNAME'
 
         # Main sudoers file configuration
-        echo '%sudo ALL=(ALL:ALL) ALL' >> '$PREFIX/var/lib/proot-distro/installed-rootfs/debian/etc/sudoers'
+        echo '%sudo ALL=(ALL:ALL) ALL' >> '$PROOT_DEBIAN_ROOT/etc/sudoers'
 
         # Check permissions
-        chmod 440 '$PREFIX/var/lib/proot-distro/installed-rootfs/debian/etc/sudoers'
-        chown root:root '$PREFIX/var/lib/proot-distro/installed-rootfs/debian/etc/sudoers'
+        chmod 440 '$PROOT_DEBIAN_ROOT/etc/sudoers'
+        chown root:root '$PROOT_DEBIAN_ROOT/etc/sudoers'
     " "Sudo rights configuration"
+}
+
+#------------------------------------------------------------------------------
+# GPU DETECTION
+#------------------------------------------------------------------------------
+detect_gpu() {
+    local platform=$(getprop ro.board.platform 2>/dev/null)
+    local hardware=$(getprop ro.hardware 2>/dev/null)
+
+    # Qualcomm Adreno
+    if [[ "$platform" =~ ^(msm|sdm|sm|lahaina|taro|kalama|crow|pineapple) ]] || \
+       [[ "$hardware" == *"qcom"* ]]; then
+        GPU_VENDOR="adreno"
+        return
+    fi
+
+    # MediaTek (Mali GPU)
+    if [[ "$platform" =~ ^mt ]]; then
+        GPU_VENDOR="mali"
+        return
+    fi
+
+    # Samsung Exynos (Mali GPU)
+    if [[ "$platform" =~ ^exynos ]] || [[ "$hardware" == *"exynos"* ]]; then
+        GPU_VENDOR="mali"
+        return
+    fi
+
+    # Google Tensor (Mali GPU)
+    if [[ "$platform" =~ ^gs ]] || [[ "$platform" == "zuma" ]]; then
+        GPU_VENDOR="mali"
+        return
+    fi
+
+    GPU_VENDOR="unknown"
 }
 
 #------------------------------------------------------------------------------
 # MESA-VULKAN INSTALLATION
 #------------------------------------------------------------------------------
 install_mesa_vulkan() {
-    local MESA_PACKAGE="mesa-vulkan-kgsl_24.1.0-devel-20240120_arm64.deb"
-    local MESA_URL="https://github.com/devohmycode/OhMyTermux/raw/$BRANCH/src/$MESA_PACKAGE"
+    info_msg "$(t "MSG_PROOT_GPU_DETECTING")"
+    detect_gpu
 
-    if ! proot-distro login debian --shared-tmp -- env DISPLAY=:1.0 dpkg -s mesa-vulkan-kgsl &> /dev/null; then
-        execute_command "proot-distro login debian --shared-tmp -- env DISPLAY=:1.0 wget $MESA_URL" "$(t "MSG_PROOT_MESA_DOWNLOAD")"
-        execute_command "proot-distro login debian --shared-tmp -- env DISPLAY=:1.0 sudo apt install -y ./$MESA_PACKAGE" "$(t "MSG_PROOT_MESA_INSTALLATION")"
-    else
-        info_msg "$(t "MSG_PROOT_MESA_ALREADY_INSTALLED")"
-    fi
+    # Save GPU vendor for other scripts (utils.sh)
+    mkdir -p "$OHMYTERMUX_CONFIG_DIR"
+    echo "$GPU_VENDOR" > "$OHMYTERMUX_CONFIG_DIR/gpu_vendor"
+
+    case "$GPU_VENDOR" in
+        adreno)
+            info_msg "$(printf "$(t "MSG_PROOT_GPU_DETECTED")" "$(t "MSG_PROOT_GPU_ADRENO")")"
+            local MESA_PACKAGE="mesa-vulkan-kgsl_24.1.0-devel-20240120_arm64.deb"
+            local MESA_URL="$OHMYTERMUX_REPO_URL/$BRANCH/src/$MESA_PACKAGE"
+
+            if ! proot-distro login debian --shared-tmp -- dpkg -s mesa-vulkan-kgsl &> /dev/null; then
+                execute_command "curl -fL -o $PREFIX/tmp/$MESA_PACKAGE $MESA_URL" "$(t "MSG_PROOT_MESA_DOWNLOAD")"
+                execute_command "proot-distro login debian --shared-tmp -- apt install -y /tmp/$MESA_PACKAGE" "$(t "MSG_PROOT_MESA_INSTALLATION")"
+            else
+                info_msg "$(t "MSG_PROOT_MESA_ALREADY_INSTALLED")"
+            fi
+            ;;
+        mali)
+            info_msg "$(printf "$(t "MSG_PROOT_GPU_DETECTED")" "$(t "MSG_PROOT_GPU_MALI")")"
+            warning_msg "$(t "MSG_PROOT_GPU_MALI_WARNING")"
+            ;;
+        *)
+            info_msg "$(printf "$(t "MSG_PROOT_GPU_DETECTED")" "$(t "MSG_PROOT_GPU_UNKNOWN")")"
+            warning_msg "$(t "MSG_PROOT_GPU_UNKNOWN_WARNING")"
+            ;;
+    esac
 }
 
 #------------------------------------------------------------------------------
@@ -414,7 +250,7 @@ install_mesa_vulkan() {
 copy_theme() {
     local theme_name="$1"
     local theme_path=""
-    
+
     case $theme_name in
         "WhiteSur")
             theme_path="WhiteSur-Dark"
@@ -427,7 +263,7 @@ copy_theme() {
             ;;
     esac
 
-    execute_command "cp -r $PREFIX/share/themes/$theme_path $PREFIX/var/lib/proot-distro/installed-rootfs/debian/usr/share/themes/" "$(t "MSG_PROOT_THEME_CONFIGURATION")"
+    execute_command "cp -r $PREFIX/share/themes/$theme_path $PROOT_DEBIAN_ROOT/usr/share/themes/" "$(t "MSG_PROOT_THEME_CONFIGURATION")"
 }
 
 #------------------------------------------------------------------------------
@@ -436,7 +272,7 @@ copy_theme() {
 copy_icons() {
     local icon_theme="$1"
     local icon_path=""
-    
+
     case $icon_theme in
         "WhiteSur")
             icon_path="WhiteSur-dark"
@@ -454,8 +290,8 @@ copy_icons() {
             icon_path="Qogir-dark"
             ;;
     esac
-    
-    execute_command "cp -r $PREFIX/share/icons/$icon_path $PREFIX/var/lib/proot-distro/installed-rootfs/debian/usr/share/icons/" "$(t "MSG_PROOT_ICONS_CONFIGURATION")"
+
+    execute_command "cp -r $PREFIX/share/icons/$icon_path $PROOT_DEBIAN_ROOT/usr/share/icons/" "$(t "MSG_PROOT_ICONS_CONFIGURATION")"
 }
 
 #------------------------------------------------------------------------------
@@ -463,17 +299,17 @@ copy_icons() {
 #------------------------------------------------------------------------------
 configure_themes_and_icons() {
     # Load configuration from temporary file
-    if [ -f "$HOME/.config/OhMyTermux/theme_config.tmp" ]; then
-        source "$HOME/.config/OhMyTermux/theme_config.tmp"
+    if [ -f "$OHMYTERMUX_CONFIG_DIR/theme_config.tmp" ]; then
+        source "$OHMYTERMUX_CONFIG_DIR/theme_config.tmp"
     fi
 
     # Create necessary directories
     execute_command "
-        mkdir -p \"$PREFIX/var/lib/proot-distro/installed-rootfs/debian/usr/share/themes\"
-        mkdir -p \"$PREFIX/var/lib/proot-distro/installed-rootfs/debian/usr/share/icons\"
-        mkdir -p \"$PREFIX/var/lib/proot-distro/installed-rootfs/debian/usr/share/backgrounds/whitesur\"
-        mkdir -p \"$PREFIX/var/lib/proot-distro/installed-rootfs/debian/home/$USERNAME/.fonts/\"
-        mkdir -p \"$PREFIX/var/lib/proot-distro/installed-rootfs/debian/home/$USERNAME/.themes/\"
+        mkdir -p \"$PROOT_DEBIAN_ROOT/usr/share/themes\"
+        mkdir -p \"$PROOT_DEBIAN_ROOT/usr/share/icons\"
+        mkdir -p \"$PROOT_DEBIAN_ROOT/usr/share/backgrounds/whitesur\"
+        mkdir -p \"$PROOT_DEBIAN_ROOT/home/$USERNAME/.fonts/\"
+        mkdir -p \"$PROOT_DEBIAN_ROOT/home/$USERNAME/.themes/\"
     " "$(t "MSG_PROOT_CREATING_DIRECTORIES")"
 
     # Copy themes if installed
@@ -488,22 +324,22 @@ configure_themes_and_icons() {
 
     # Copy wallpapers if installed
     if [ "$INSTALL_WALLPAPERS" = true ]; then
-        execute_command "cp -r $PREFIX/share/backgrounds/whitesur/* $PREFIX/var/lib/proot-distro/installed-rootfs/debian/usr/share/backgrounds/whitesur/" "$(t "MSG_PROOT_WALLPAPERS_CONFIG")"
+        execute_command "cp -r $PREFIX/share/backgrounds/whitesur/* $PROOT_DEBIAN_ROOT/usr/share/backgrounds/whitesur/" "$(t "MSG_PROOT_WALLPAPERS_CONFIG")"
     fi
 
     # Cursors configuration
     if [ "$INSTALL_CURSORS" = true ]; then
         cd "$PREFIX/share/icons"
-        execute_command "find dist-dark | cpio -pdm \"$PREFIX/var/lib/proot-distro/installed-rootfs/debian/usr/share/icons\"" "$(t "MSG_PROOT_CURSORS_CONFIG")"
+        execute_command "find dist-dark | cpio -pdm \"$PROOT_DEBIAN_ROOT/usr/share/icons\"" "$(t "MSG_PROOT_CURSORS_CONFIG")"
 
         # Xresources configuration
-        cat << EOF > "$PREFIX/var/lib/proot-distro/installed-rootfs/debian/home/$USERNAME/.Xresources"
+        cat << EOF > "$PROOT_DEBIAN_ROOT/home/$USERNAME/.Xresources"
 Xcursor.theme: dist-dark
 EOF
     fi
 
     # Delete the temporary configuration file
-    rm -f "$HOME/.config/OhMyTermux/theme_config.tmp"
+    rm -f "$OHMYTERMUX_CONFIG_DIR/theme_config.tmp"
 }
 
 #------------------------------------------------------------------------------
@@ -537,7 +373,7 @@ if [ $# -eq 0 ] && [ -z "$PROOT_USERNAME" ] && [ -z "$PROOT_PASSWORD" ]; then
             echo -e "${COLOR_BLUE}$(t "MSG_PROOT_CONFIRM_PASSWORD")${COLOR_RESET}"
             read -rs PASSWORD_CONFIRM
             tput cuu1
-            tput el 
+            tput el
             if [ "$PROOT_PASSWORD" = "$PASSWORD_CONFIRM" ]; then
                 break
             else
@@ -588,7 +424,7 @@ execute_command "proot-distro install debian" "$(t "MSG_PROOT_DISTRIBUTION_INSTA
 #------------------------------------------------------------------------------
 # DEBIAN INSTALLATION CHECK
 #------------------------------------------------------------------------------
-if [ ! -d "$PREFIX/var/lib/proot-distro/installed-rootfs/debian" ]; then
+if [ ! -d "$PROOT_DEBIAN_ROOT" ]; then
     error_msg "$(t "MSG_PROOT_DEBIAN_FAILED")"
     exit 1
 fi

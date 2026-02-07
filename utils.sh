@@ -3,6 +3,9 @@
 # Get script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# GitHub branch for downloads
+BRANCH="${BRANCH:-1.1.02}"
+
 # Language override variable
 OVERRIDE_LANG=""
 
@@ -26,14 +29,14 @@ for ARG in "$@"; do
     esac
 done
 
-# Load the internationalization system
-if [ -f "$SCRIPT_DIR/i18n/i18n.sh" ]; then
-    source "$SCRIPT_DIR/i18n/i18n.sh"
-    init_i18n "$OVERRIDE_LANG"
-else
-    # Fallback for messages if i18n is not available
-    t() { echo "$1"; }
+# Bootstrap: load i18n and lib systems
+_loader_url="https://raw.githubusercontent.com/devohmycode/OhMyTermux/$BRANCH/lib/i18n_loader.sh"
+mkdir -p "$SCRIPT_DIR/lib"
+if [ ! -f "$SCRIPT_DIR/lib/i18n_loader.sh" ]; then
+    curl -fL -s -o "$SCRIPT_DIR/lib/i18n_loader.sh" "$_loader_url" 2>/dev/null
 fi
+I18N_SKIP_LIB=true
+source "$SCRIPT_DIR/lib/i18n_loader.sh"
 
 #------------------------------------------------------------------------------
 # PRUN
@@ -49,24 +52,42 @@ chmod +x $PREFIX/bin/prun
 
 #------------------------------------------------------------------------------
 # ZRUN
-# Launch programs with the Zink driver
+# Launch programs with the Zink driver (GPU-aware)
 #------------------------------------------------------------------------------
 cat <<'EOF' > $PREFIX/bin/zrun
 #!/bin/bash
 varname=$(basename $PREFIX/var/lib/proot-distro/installed-rootfs/debian/home/*)
-pd login debian --user $varname --shared-tmp -- env DISPLAY=:1.0 MESA_LOADER_DRIVER_OVERRIDE=zink TU_DEBUG=noconform $@
+GPU_VENDOR="unknown"
+if [ -f "$HOME/.config/OhMyTermux/gpu_vendor" ]; then
+    GPU_VENDOR=$(cat "$HOME/.config/OhMyTermux/gpu_vendor")
+fi
+
+if [ "$GPU_VENDOR" = "adreno" ]; then
+    pd login debian --user $varname --shared-tmp -- env DISPLAY=:1.0 MESA_LOADER_DRIVER_OVERRIDE=zink TU_DEBUG=noconform $@
+else
+    pd login debian --user $varname --shared-tmp -- env DISPLAY=:1.0 GALLIUM_DRIVER=virpipe $@
+fi
 
 EOF
 chmod +x $PREFIX/bin/zrun
 
 #------------------------------------------------------------------------------
 # ZRUN HUD
-# Display the Zink HUD
+# Display the Zink HUD (GPU-aware)
 #------------------------------------------------------------------------------
 cat <<'EOF' > $PREFIX/bin/zrunhud
 #!/bin/bash
 varname=$(basename $PREFIX/var/lib/proot-distro/installed-rootfs/debian/home/*)
-pd login debian --user $varname --shared-tmp -- env DISPLAY=:1.0 MESA_LOADER_DRIVER_OVERRIDE=zink TU_DEBUG=noconform GALLIUM_HUD=fps $@
+GPU_VENDOR="unknown"
+if [ -f "$HOME/.config/OhMyTermux/gpu_vendor" ]; then
+    GPU_VENDOR=$(cat "$HOME/.config/OhMyTermux/gpu_vendor")
+fi
+
+if [ "$GPU_VENDOR" = "adreno" ]; then
+    pd login debian --user $varname --shared-tmp -- env DISPLAY=:1.0 MESA_LOADER_DRIVER_OVERRIDE=zink TU_DEBUG=noconform GALLIUM_HUD=fps $@
+else
+    pd login debian --user $varname --shared-tmp -- env DISPLAY=:1.0 GALLIUM_DRIVER=virpipe GALLIUM_HUD=fps $@
+fi
 
 EOF
 chmod +x $PREFIX/bin/zrunhud
@@ -153,8 +174,9 @@ APP_DESKTOP_FILE="$DESKTOP_DIR/app-installer.desktop"
 
 # Check the existence of the directory
 if [ ! -d "$INSTALLER_DIR" ]; then
-    # The directory does not exist, clone the repository
-    git clone "$REPO_URL" "$INSTALLER_DIR" > /dev/null 2>&1
+    # TODO: Repository currently unavailable, re-enable when migrated
+    # git clone "$REPO_URL" "$INSTALLER_DIR" > /dev/null 2>&1
+    echo "App Installer repository not available yet." > /dev/null 2>&1
 else
     "$INSTALLER_DIR/app-installer"
 fi
@@ -182,7 +204,8 @@ chmod +x "$INSTALLER_DIR/app-installer"
 
 EOF
 chmod +x "$PREFIX/bin/app-installer"
-bash $PREFIX/bin/app-installer > /dev/null 2>&1
+# TODO: Disabled until OhMyAppInstaller repository is migrated
+# bash $PREFIX/bin/app-installer > /dev/null 2>&1
 
 # Create the shortcut
 if [ ! -f "$HOME/Desktop/app-installer.desktop" ]; then

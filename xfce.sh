@@ -4,7 +4,7 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # GitHub branch for downloads
-BRANCH="main"
+BRANCH="1.1.02"
 
 # Language override variable
 OVERRIDE_LANG=""
@@ -29,64 +29,15 @@ for ARG in "$@"; do
     esac
 done
 
-# Function to download the i18n system if needed
-download_i18n_system() {
-    local BASE_URL="https://raw.githubusercontent.com/devohmycode/OhMyTermux/$BRANCH"
-    local TEMP_I18N_DIR="$SCRIPT_DIR/i18n"
-    local TEMP_MESSAGES_DIR="$TEMP_I18N_DIR/messages"
-
-    # Create temporary directories
-    mkdir -p "$TEMP_MESSAGES_DIR"
-
-    # List of i18n files to download
-    local I18N_FILES=(
-        "i18n/i18n.sh"
-        "i18n/locale_detect.sh"
-        "i18n/messages/en.sh"
-        "i18n/messages/fr.sh"
-    )
-
-    # Download each file
-    for FILE in "${I18N_FILES[@]}"; do
-        local URL="$BASE_URL/$FILE"
-        local LOCAL_PATH="$SCRIPT_DIR/$FILE"
-        local LOCAL_DIR=$(dirname "$LOCAL_PATH")
-
-        # Create directory if needed
-        mkdir -p "$LOCAL_DIR"
-
-        # Download the file
-        if ! curl -L -s -o "$LOCAL_PATH" "$URL" 2>/dev/null; then
-            echo "Warning: Could not download $FILE from $URL" >&2
-            return 1
-        fi
-    done
-
-    return 0
-}
-
-if [ -f "$SCRIPT_DIR/i18n/i18n.sh" ]; then
-    source "$SCRIPT_DIR/i18n/i18n.sh"
-    init_i18n "$OVERRIDE_LANG"
-else
-    echo "Initializing i18n system..." >&2
-    # Temporarily set BRANCH if not already set
-    if [ -z "$BRANCH" ]; then
-        BRANCH="main"
-    fi
-    # Download the i18n system
-    if download_i18n_system; then
-        source "$SCRIPT_DIR/i18n/i18n.sh"
-        init_i18n "$OVERRIDE_LANG"
-        echo "i18n system downloaded and loaded successfully." >&2
-    else
-        echo "Error: Could not download i18n system. Using fallback messages." >&2
-        # Define basic fallback functions
-        t() { echo "$1"; }
-        init_i18n() { return 0; }
-        MESSAGES_LOADED="fallback"
-    fi
+#------------------------------------------------------------------------------
+# BOOTSTRAP - Load i18n and lib systems
+#------------------------------------------------------------------------------
+_loader_url="https://raw.githubusercontent.com/devohmycode/OhMyTermux/$BRANCH/lib/i18n_loader.sh"
+mkdir -p "$SCRIPT_DIR/lib"
+if [ ! -f "$SCRIPT_DIR/lib/i18n_loader.sh" ]; then
+    curl -fL -s -o "$SCRIPT_DIR/lib/i18n_loader.sh" "$_loader_url" 2>/dev/null
 fi
+source "$SCRIPT_DIR/lib/i18n_loader.sh"
 
 #------------------------------------------------------------------------------
 # GLOBAL VARIABLES
@@ -95,23 +46,9 @@ USE_GUM=false
 VERBOSE=false
 BROWSER="chromium"
 
-#------------------------------------------------------------------------------
-# DISPLAY COLORS
-#------------------------------------------------------------------------------
-COLOR_BLUE='\033[38;5;33m'    # Information
-COLOR_GREEN='\033[38;5;82m'   # Success
-COLOR_GOLD='\033[38;5;220m'   # Warning
-COLOR_RED='\033[38;5;196m'    # Error
-COLOR_RESET='\033[0m'         # Reset
-
-#------------------------------------------------------------------------------
-# REDIRECTION
-#------------------------------------------------------------------------------
-if [ "$VERBOSE" = false ]; then
-    REDIRECT=">/dev/null 2>&1"
-else
-    REDIRECT=""
-fi
+# Configure error handler keys for this script
+ERROR_MSG_KEY="MSG_XFCE_ERROR_INSTALL"
+ERROR_REFER_KEY="MSG_XFCE_ERROR_REFER"
 
 #------------------------------------------------------------------------------
 # DISPLAY HELP
@@ -119,7 +56,7 @@ fi
 show_help() {
     clear
     echo "$(t "MSG_XFCE_HELP_TITLE")"
-    echo 
+    echo
     echo "$(t "MSG_XFCE_HELP_USAGE")"
     echo "$(t "MSG_XFCE_HELP_OPTIONS")"
     echo "  --gum | -g        $(t "MSG_XFCE_HELP_GUM")"
@@ -182,7 +119,7 @@ for arg in "$@"; do
             ;;
         --full)
             FULL_INSTALL=true
-            XFCE_VERSION="recommandée"
+            XFCE_VERSION="recommended"
             BROWSER_CHOICE="chromium"
             INSTALL_THEME=true
             INSTALL_ICONS=true
@@ -210,228 +147,6 @@ for arg in "$@"; do
             ;;
     esac
 done
-
-#------------------------------------------------------------------------------
-# GUM CONFIRMATION
-#------------------------------------------------------------------------------
-gum_confirm() {
-    local PROMPT="$1"
-    if $FULL_INSTALL; then
-        return 0 
-    else
-        gum confirm --affirmative "$(t CONFIRM_YES)" --negative "$(t CONFIRM_NO)" --prompt.foreground="33" --selected.background="33" --selected.foreground="0" "$PROMPT"
-    fi
-}
-
-#------------------------------------------------------------------------------
-# GUM UNIQUE SELECTION
-#------------------------------------------------------------------------------
-gum_choose() {
-    local PROMPT="$1"
-    shift
-    local SELECTED=""
-    local OPTIONS=()
-    local HEIGHT=10
-
-    while [[ $# -gt 0 ]]; do
-        case $1 in
-            --selected=*)
-                SELECTED="${1#*=}"
-                ;;
-            --height=*)
-                HEIGHT="${1#*=}"
-                ;;
-            *)
-                OPTIONS+=("$1")
-                ;;
-        esac
-        shift
-    done
-
-    gum choose --selected.foreground="33" --header.foreground="33" --cursor.foreground="33" --height="$HEIGHT" --header="$PROMPT" --selected="$SELECTED" "${OPTIONS[@]}"
-}
-
-#------------------------------------------------------------------------------
-# GUM MULTIPLE SELECTION
-#------------------------------------------------------------------------------
-gum_choose_multi() {
-    local PROMPT="$1"
-    shift
-    local SELECTED=""
-    local OPTIONS=()
-    local HEIGHT=10
-
-    while [[ $# -gt 0 ]]; do
-        case $1 in
-            --selected=*)
-                SELECTED="${1#*=}"
-                ;;
-            --height=*)
-                HEIGHT="${1#*=}"
-                ;;
-            *)
-                OPTIONS+=("$1")
-                ;;
-        esac
-        shift
-    done
-
-    gum choose --no-limit --selected.foreground="33" --header.foreground="33" --cursor.foreground="33" --height="$HEIGHT" --header="$PROMPT" --selected="$SELECTED" "${OPTIONS[@]}"
-}
-
-#------------------------------------------------------------------------------
-# TEXT BANNER
-#------------------------------------------------------------------------------
-bash_banner() {
-    clear
-    local BANNER="
-╔════════════════════════════════════════╗
-║                                        ║
-║               OHMYTERMUX               ║
-║                                        ║
-╚════════════════════════════════════════╝"
-
-    echo -e "${COLOR_BLUE}${BANNER}${COLOR_RESET}\n"
-}
-
-#------------------------------------------------------------------------------
-# GRAPHIC BANNER
-#------------------------------------------------------------------------------
-show_banner() {
-    clear
-    if $USE_GUM; then
-        gum style \
-            --foreground 33 \
-            --border-foreground 33 \
-            --border double \
-            --align center \
-            --width 42 \
-            --margin "1 1 1 0" \
-            "" "OHMYTERMUX" ""
-    else
-        bash_banner
-    fi
-}
-
-#------------------------------------------------------------------------------
-# ERROR MANAGEMENT
-#------------------------------------------------------------------------------
-finish() {
-    local RET=$?
-    if [ ${RET} -ne 0 ] && [ ${RET} -ne 130 ]; then
-        echo
-        if $USE_GUM; then
-            gum style --foreground 196 "$(t "MSG_XFCE_ERROR_INSTALL")"
-        else
-            echo -e "${COLOR_RED}$(t "MSG_XFCE_ERROR_INSTALL")${COLOR_RESET}"
-        fi
-        echo -e "${COLOR_BLUE}$(t "MSG_XFCE_ERROR_REFER")${COLOR_RESET}"
-    fi
-}
-
-#------------------------------------------------------------------------------
-# INFO MESSAGES
-#------------------------------------------------------------------------------
-info_msg() {
-    if $USE_GUM; then
-        gum style "${1//$'\n'/ }" --foreground 33
-    else
-        echo -e "${COLOR_BLUE}$1${COLOR_RESET}"
-    fi
-}
-
-#------------------------------------------------------------------------------
-# SUCCESS MESSAGES
-#------------------------------------------------------------------------------
-success_msg() {
-    if $USE_GUM; then
-        gum style "${1//$'\n'/ }" --foreground 82
-    else
-        echo -e "${COLOR_GREEN}$1${COLOR_RESET}"
-    fi
-}
-
-#------------------------------------------------------------------------------
-# ERROR MESSAGES
-#------------------------------------------------------------------------------
-error_msg() {
-    if $USE_GUM; then
-        gum style "${1//$'\n'/ }" --foreground 196
-    else
-        echo -e "${COLOR_RED}$1${COLOR_RESET}"
-    fi
-}
-
-#------------------------------------------------------------------------------
-# TITLE MESSAGES
-#------------------------------------------------------------------------------
-title_msg() {
-    if $USE_GUM; then
-        gum style "${1//$'\n'/ }" --foreground 220 --bold
-    else
-        echo -e "\n${COLOR_GOLD}\033[1m$1\033[0m${COLOR_RESET}"
-    fi
-}
-
-#------------------------------------------------------------------------------
-# SUBTITLE MESSAGES
-#------------------------------------------------------------------------------
-subtitle_msg() {
-    if $USE_GUM; then
-        gum style "${1//$'\n'/ }" --foreground 33 --bold
-    else
-        echo -e "\n${COLOR_BLUE}\033[1m$1\033[0m${COLOR_RESET}"
-    fi
-}
-
-#------------------------------------------------------------------------------
-# ERROR LOGGING
-#------------------------------------------------------------------------------
-log_error() {
-    local ERROR_MSG="$1"
-    local USERNAME=$(whoami)
-    local HOSTNAME=$(hostname)
-    local CWD=$(pwd)
-    echo "[$(date +'%d/%m/%Y %H:%M:%S')] ERROR: $ERROR_MSG | User: $USERNAME | Host: $HOSTNAME | Directory: $CWD" >> "$HOME/.config/OhMyTermux/install.log"
-}
-
-#------------------------------------------------------------------------------
-# DYNAMIC RESULT DISPLAY
-#------------------------------------------------------------------------------
-execute_command() {
-    local COMMAND="$1"
-    local INFO_MSG="$2"
-    local SUCCESS_MSG="✓ $INFO_MSG"
-    local ERROR_MSG="✗ $INFO_MSG"
-    local ERROR_DETAILS
-
-    if $USE_GUM; then
-        if gum spin --spinner.foreground="33" --title.foreground="33" --spinner dot --title "$INFO_MSG" -- bash -c "$COMMAND $REDIRECT"; then
-            gum style "$SUCCESS_MSG" --foreground 82
-        else
-            ERROR_DETAILS="Command: $COMMAND, Redirect: $REDIRECT, Time: $(date +'%d/%m/%Y %H:%M:%S')"
-            gum style "$ERROR_MSG" --foreground 196
-            log_error "$ERROR_DETAILS"
-            return 1
-        fi
-    else
-        tput sc
-        info_msg "$INFO_MSG"
-        
-        if eval "$COMMAND $REDIRECT"; then
-            tput rc
-            tput el
-            success_msg "$SUCCESS_MSG"
-        else
-            tput rc
-            tput el
-            ERROR_DETAILS="Command: $COMMAND, Redirect: $REDIRECT, Time: $(date +'%d/%m/%Y %H:%M:%S')"
-            error_msg "$ERROR_MSG"
-            log_error "$ERROR_DETAILS"
-            return 1
-        fi
-    fi
-}
 
 #------------------------------------------------------------------------------
 # FILE DOWNLOAD
@@ -547,7 +262,7 @@ EOF
     fi
 
     case "$INSTALL_TYPE" in
-        "recommandée")
+        "recommended")
             # Complete configuration with all elements
             cat > "$CONFIG_DIR/xsettings.xml" << EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -573,7 +288,7 @@ EOF
 EOF
             ;;
 
-        "minimale"|"personnalisée")
+        "minimal"|"customized")
             # Base configuration
             local THEME_VALUE="Default"
             local ICON_VALUE="Adwaita"
@@ -661,8 +376,8 @@ EOF
 # THEME CONFIGURATION SAVE
 #------------------------------------------------------------------------------
 save_theme_config() {
-    mkdir -p "$HOME/.config/OhMyTermux"
-    cat > "$HOME/.config/OhMyTermux/theme_config.tmp" << EOF
+    mkdir -p "$OHMYTERMUX_CONFIG_DIR"
+    cat > "$OHMYTERMUX_CONFIG_DIR/theme_config.tmp" << EOF
 INSTALL_THEME=$INSTALL_THEME
 INSTALL_ICONS=$INSTALL_ICONS
 INSTALL_WALLPAPERS=$INSTALL_WALLPAPERS
@@ -760,7 +475,7 @@ install_icon_pack() {
 }
 
 install_icons() {
-    if $INSTALL_ICONS; then     
+    if $INSTALL_ICONS; then
         # If it's a complete installation, set WhiteSur as the default icon theme
         if $FULL_INSTALL; then
             SELECTED_ICON_THEMES=("WhiteSur")
@@ -805,6 +520,9 @@ install_wallpapers() {
                         ./install-wallpapers.sh && \
                         cd .. && \
                         rm -rf WhiteSur-wallpapers-2023-06-11 $ARCHIVE" "Install wallpapers"
+        execute_command "mkdir -p $PREFIX/share/backgrounds/whitesur && \
+                        cp -r $HOME/.local/share/backgrounds/*.jpg $PREFIX/share/backgrounds/whitesur/ && \
+                        cp -r $HOME/.local/share/backgrounds/*.png $PREFIX/share/backgrounds/whitesur/ 2>/dev/null; true" "Configure wallpapers"
     fi
 }
 
@@ -1129,7 +847,7 @@ main() {
     fi
 
     # XFCE elements installation
-    if [ "$INSTALL_TYPE" != "minimale" ]; then
+    if [ "$INSTALL_TYPE" != "minimal" ]; then
         subtitle_msg "❯ XFCE elements installation"
         [ "$INSTALL_THEME" = true ] && install_themes
         [ "$INSTALL_ICONS" = true ] && install_icons
