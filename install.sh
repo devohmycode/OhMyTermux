@@ -65,6 +65,7 @@ FISHRC="$HOME/.config/fish/config.fish"
 #------------------------------------------------------------------------------
 # BOOTSTRAP - Load i18n and lib systems
 #------------------------------------------------------------------------------
+OHMYTERMUX_REPO_URL="${OHMYTERMUX_REPO_URL:-https://raw.githubusercontent.com/devohmycode/OhMyTermux}"
 _loader_url="$OHMYTERMUX_REPO_URL/$BRANCH/lib/i18n_loader.sh"
 mkdir -p "$SCRIPT_DIR/lib"
 if [ ! -f "$SCRIPT_DIR/lib/i18n_loader.sh" ]; then
