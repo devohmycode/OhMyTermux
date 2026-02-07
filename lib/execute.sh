@@ -22,7 +22,7 @@ execute_command() {
         tput sc
         info_msg "$INFO_MSG"
 
-        if eval "$COMMAND $REDIRECT"; then
+        if bash -c "$COMMAND $REDIRECT"; then
             tput rc
             tput el
             success_msg "$SUCCESS_MSG"

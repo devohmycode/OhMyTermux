@@ -7,6 +7,7 @@
 # Determine the lib directory
 _LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+source "$_LIB_DIR/constants.sh"
 source "$_LIB_DIR/colors.sh"
 source "$_LIB_DIR/messages.sh"
 source "$_LIB_DIR/logging.sh"

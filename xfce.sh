@@ -32,33 +32,12 @@ done
 #------------------------------------------------------------------------------
 # BOOTSTRAP - Load i18n and lib systems
 #------------------------------------------------------------------------------
-_bootstrap_url="https://raw.githubusercontent.com/devohmycode/OhMyTermux/$BRANCH/lib/bootstrap.sh"
-_validate_script() { head -1 "$1" 2>/dev/null | grep -q "^#!/bin/bash"; }
-
+_loader_url="https://raw.githubusercontent.com/devohmycode/OhMyTermux/$BRANCH/lib/i18n_loader.sh"
 mkdir -p "$SCRIPT_DIR/lib"
-if [ ! -f "$SCRIPT_DIR/lib/bootstrap.sh" ] || ! _validate_script "$SCRIPT_DIR/lib/bootstrap.sh"; then
-    curl -fL -s -o "$SCRIPT_DIR/lib/bootstrap.sh" "$_bootstrap_url" 2>/dev/null
-    if ! _validate_script "$SCRIPT_DIR/lib/bootstrap.sh"; then
-        echo "Error: Failed to download bootstrap.sh from $_bootstrap_url" >&2
-        exit 1
-    fi
+if [ ! -f "$SCRIPT_DIR/lib/i18n_loader.sh" ]; then
+    curl -fL -s -o "$SCRIPT_DIR/lib/i18n_loader.sh" "$_loader_url" 2>/dev/null
 fi
-source "$SCRIPT_DIR/lib/bootstrap.sh"
-
-# Download and load i18n
-if [ ! -f "$SCRIPT_DIR/i18n/i18n.sh" ] || ! _validate_script "$SCRIPT_DIR/i18n/i18n.sh"; then
-    echo "Initializing i18n system..." >&2
-    if download_i18n_system && _validate_script "$SCRIPT_DIR/i18n/i18n.sh"; then
-        echo "i18n system downloaded and loaded successfully." >&2
-    else
-        echo "Error: Could not download i18n system. Using fallback messages." >&2
-        t() { echo "$1"; }
-        init_i18n() { return 0; }
-        MESSAGES_LOADED="fallback"
-    fi
-fi
-[ -f "$SCRIPT_DIR/i18n/i18n.sh" ] && _validate_script "$SCRIPT_DIR/i18n/i18n.sh" && source "$SCRIPT_DIR/i18n/i18n.sh"
-type init_i18n &>/dev/null && init_i18n "$OVERRIDE_LANG"
+source "$SCRIPT_DIR/lib/i18n_loader.sh"
 
 #------------------------------------------------------------------------------
 # GLOBAL VARIABLES
@@ -66,12 +45,6 @@ type init_i18n &>/dev/null && init_i18n "$OVERRIDE_LANG"
 USE_GUM=false
 VERBOSE=false
 BROWSER="chromium"
-
-# Download and load lib
-if [ ! -f "$SCRIPT_DIR/lib/common.sh" ] || ! _validate_script "$SCRIPT_DIR/lib/common.sh"; then
-    download_lib_system
-fi
-source "$SCRIPT_DIR/lib/common.sh"
 
 # Configure error handler keys for this script
 ERROR_MSG_KEY="MSG_XFCE_ERROR_INSTALL"
@@ -403,8 +376,8 @@ EOF
 # THEME CONFIGURATION SAVE
 #------------------------------------------------------------------------------
 save_theme_config() {
-    mkdir -p "$HOME/.config/OhMyTermux"
-    cat > "$HOME/.config/OhMyTermux/theme_config.tmp" << EOF
+    mkdir -p "$OHMYTERMUX_CONFIG_DIR"
+    cat > "$OHMYTERMUX_CONFIG_DIR/theme_config.tmp" << EOF
 INSTALL_THEME=$INSTALL_THEME
 INSTALL_ICONS=$INSTALL_ICONS
 INSTALL_WALLPAPERS=$INSTALL_WALLPAPERS

@@ -7,7 +7,36 @@
 BRANCH="${BRANCH:-main}"
 
 # Base URL for downloads
-_BOOTSTRAP_BASE_URL="https://raw.githubusercontent.com/devohmycode/OhMyTermux/$BRANCH"
+_BOOTSTRAP_BASE_URL="${OHMYTERMUX_REPO_URL:-https://raw.githubusercontent.com/devohmycode/OhMyTermux}/$BRANCH"
+
+#------------------------------------------------------------------------------
+# Verify downloaded file checksum
+#------------------------------------------------------------------------------
+verify_download() {
+    local FILE_PATH="$1"
+    local EXPECTED_HASH="$2"
+
+    if [ -z "$EXPECTED_HASH" ]; then
+        return 0
+    fi
+
+    if ! command -v sha256sum &>/dev/null; then
+        echo "Warning: sha256sum not available, skipping checksum verification" >&2
+        return 0
+    fi
+
+    local ACTUAL_HASH
+    ACTUAL_HASH=$(sha256sum "$FILE_PATH" 2>/dev/null | cut -d' ' -f1)
+
+    if [ "$ACTUAL_HASH" != "$EXPECTED_HASH" ]; then
+        echo "Error: Checksum mismatch for $FILE_PATH" >&2
+        echo "  Expected: $EXPECTED_HASH" >&2
+        echo "  Got:      $ACTUAL_HASH" >&2
+        return 1
+    fi
+
+    return 0
+}
 
 #------------------------------------------------------------------------------
 # Generic file download function
@@ -53,7 +82,9 @@ download_i18n_system() {
 #------------------------------------------------------------------------------
 download_lib_system() {
     local LIB_FILES=(
+        "lib/i18n_loader.sh"
         "lib/common.sh"
+        "lib/constants.sh"
         "lib/colors.sh"
         "lib/messages.sh"
         "lib/logging.sh"

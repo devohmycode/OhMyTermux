@@ -47,39 +47,12 @@ done
 #------------------------------------------------------------------------------
 # BOOTSTRAP - Load i18n and lib systems
 #------------------------------------------------------------------------------
-_bootstrap_url="https://raw.githubusercontent.com/devohmycode/OhMyTermux/$BRANCH/lib/bootstrap.sh"
-_validate_script() { head -1 "$1" 2>/dev/null | grep -q "^#!/bin/bash"; }
-
+_loader_url="https://raw.githubusercontent.com/devohmycode/OhMyTermux/$BRANCH/lib/i18n_loader.sh"
 mkdir -p "$SCRIPT_DIR/lib"
-if [ ! -f "$SCRIPT_DIR/lib/bootstrap.sh" ] || ! _validate_script "$SCRIPT_DIR/lib/bootstrap.sh"; then
-    curl -fL -s -o "$SCRIPT_DIR/lib/bootstrap.sh" "$_bootstrap_url" 2>/dev/null
-    if ! _validate_script "$SCRIPT_DIR/lib/bootstrap.sh"; then
-        echo "Error: Failed to download bootstrap.sh from $_bootstrap_url" >&2
-        exit 1
-    fi
+if [ ! -f "$SCRIPT_DIR/lib/i18n_loader.sh" ]; then
+    curl -fL -s -o "$SCRIPT_DIR/lib/i18n_loader.sh" "$_loader_url" 2>/dev/null
 fi
-source "$SCRIPT_DIR/lib/bootstrap.sh"
-
-# Download and load i18n
-if [ ! -f "$SCRIPT_DIR/i18n/i18n.sh" ] || ! _validate_script "$SCRIPT_DIR/i18n/i18n.sh"; then
-    echo "Initializing i18n system..." >&2
-    if download_i18n_system && _validate_script "$SCRIPT_DIR/i18n/i18n.sh"; then
-        echo "i18n system downloaded and loaded successfully." >&2
-    else
-        echo "Error: Could not download i18n system. Using fallback messages." >&2
-        t() { echo "$1"; }
-        init_i18n() { return 0; }
-        MESSAGES_LOADED="fallback"
-    fi
-fi
-[ -f "$SCRIPT_DIR/i18n/i18n.sh" ] && _validate_script "$SCRIPT_DIR/i18n/i18n.sh" && source "$SCRIPT_DIR/i18n/i18n.sh"
-type init_i18n &>/dev/null && init_i18n "$OVERRIDE_LANG"
-
-# Download and load lib
-if [ ! -f "$SCRIPT_DIR/lib/common.sh" ] || ! _validate_script "$SCRIPT_DIR/lib/common.sh"; then
-    download_lib_system
-fi
-source "$SCRIPT_DIR/lib/common.sh"
+source "$SCRIPT_DIR/lib/i18n_loader.sh"
 
 # Configure error handler keys for this script
 ERROR_MSG_KEY="MSG_PROOT_ERROR_INSTALL"
@@ -176,7 +149,7 @@ create_user_proot() {
         proot-distro login debian --shared-tmp -- env DISPLAY=:1.0 groupadd storage
         proot-distro login debian --shared-tmp -- env DISPLAY=:1.0 groupadd wheel
         proot-distro login debian --shared-tmp -- env DISPLAY=:1.0 useradd -m -g users -G wheel,audio,video,storage -s /bin/bash '$USERNAME'
-        echo '$USERNAME:$PASSWORD' | proot-distro login debian --shared-tmp -- env DISPLAY=:1.0 chpasswd
+        proot-distro login debian --shared-tmp -- env DISPLAY=:1.0 chpasswd <<< '$USERNAME:$PASSWORD'
     " "User creation"
 }
 
@@ -189,31 +162,86 @@ configure_user_rights() {
         proot-distro login debian --shared-tmp -- env DISPLAY=:1.0 usermod -aG sudo '$USERNAME'
 
         # Create sudoers.d file for user
-        echo '$USERNAME ALL=(ALL) NOPASSWD: ALL' > '$PREFIX/var/lib/proot-distro/installed-rootfs/debian/etc/sudoers.d/$USERNAME'
-        chmod 0440 '$PREFIX/var/lib/proot-distro/installed-rootfs/debian/etc/sudoers.d/$USERNAME'
+        echo '$USERNAME ALL=(ALL) NOPASSWD: ALL' > '$PROOT_DEBIAN_ROOT/etc/sudoers.d/$USERNAME'
+        chmod 0440 '$PROOT_DEBIAN_ROOT/etc/sudoers.d/$USERNAME'
 
         # Main sudoers file configuration
-        echo '%sudo ALL=(ALL:ALL) ALL' >> '$PREFIX/var/lib/proot-distro/installed-rootfs/debian/etc/sudoers'
+        echo '%sudo ALL=(ALL:ALL) ALL' >> '$PROOT_DEBIAN_ROOT/etc/sudoers'
 
         # Check permissions
-        chmod 440 '$PREFIX/var/lib/proot-distro/installed-rootfs/debian/etc/sudoers'
-        chown root:root '$PREFIX/var/lib/proot-distro/installed-rootfs/debian/etc/sudoers'
+        chmod 440 '$PROOT_DEBIAN_ROOT/etc/sudoers'
+        chown root:root '$PROOT_DEBIAN_ROOT/etc/sudoers'
     " "Sudo rights configuration"
+}
+
+#------------------------------------------------------------------------------
+# GPU DETECTION
+#------------------------------------------------------------------------------
+detect_gpu() {
+    local platform=$(getprop ro.board.platform 2>/dev/null)
+    local hardware=$(getprop ro.hardware 2>/dev/null)
+
+    # Qualcomm Adreno
+    if [[ "$platform" =~ ^(msm|sdm|sm|lahaina|taro|kalama|crow|pineapple) ]] || \
+       [[ "$hardware" == *"qcom"* ]]; then
+        GPU_VENDOR="adreno"
+        return
+    fi
+
+    # MediaTek (Mali GPU)
+    if [[ "$platform" =~ ^mt ]]; then
+        GPU_VENDOR="mali"
+        return
+    fi
+
+    # Samsung Exynos (Mali GPU)
+    if [[ "$platform" =~ ^exynos ]] || [[ "$hardware" == *"exynos"* ]]; then
+        GPU_VENDOR="mali"
+        return
+    fi
+
+    # Google Tensor (Mali GPU)
+    if [[ "$platform" =~ ^gs ]] || [[ "$platform" == "zuma" ]]; then
+        GPU_VENDOR="mali"
+        return
+    fi
+
+    GPU_VENDOR="unknown"
 }
 
 #------------------------------------------------------------------------------
 # MESA-VULKAN INSTALLATION
 #------------------------------------------------------------------------------
 install_mesa_vulkan() {
-    local MESA_PACKAGE="mesa-vulkan-kgsl_24.1.0-devel-20240120_arm64.deb"
-    local MESA_URL="https://raw.githubusercontent.com/devohmycode/OhMyTermux/$BRANCH/src/$MESA_PACKAGE"
+    info_msg "$(t "MSG_PROOT_GPU_DETECTING")"
+    detect_gpu
 
-    if ! proot-distro login debian --shared-tmp -- dpkg -s mesa-vulkan-kgsl &> /dev/null; then
-        execute_command "curl -fL -o $PREFIX/tmp/$MESA_PACKAGE $MESA_URL" "$(t "MSG_PROOT_MESA_DOWNLOAD")"
-        execute_command "proot-distro login debian --shared-tmp -- apt install -y /tmp/$MESA_PACKAGE" "$(t "MSG_PROOT_MESA_INSTALLATION")"
-    else
-        info_msg "$(t "MSG_PROOT_MESA_ALREADY_INSTALLED")"
-    fi
+    # Save GPU vendor for other scripts (utils.sh)
+    mkdir -p "$OHMYTERMUX_CONFIG_DIR"
+    echo "$GPU_VENDOR" > "$OHMYTERMUX_CONFIG_DIR/gpu_vendor"
+
+    case "$GPU_VENDOR" in
+        adreno)
+            info_msg "$(printf "$(t "MSG_PROOT_GPU_DETECTED")" "$(t "MSG_PROOT_GPU_ADRENO")")"
+            local MESA_PACKAGE="mesa-vulkan-kgsl_24.1.0-devel-20240120_arm64.deb"
+            local MESA_URL="$OHMYTERMUX_REPO_URL/$BRANCH/src/$MESA_PACKAGE"
+
+            if ! proot-distro login debian --shared-tmp -- dpkg -s mesa-vulkan-kgsl &> /dev/null; then
+                execute_command "curl -fL -o $PREFIX/tmp/$MESA_PACKAGE $MESA_URL" "$(t "MSG_PROOT_MESA_DOWNLOAD")"
+                execute_command "proot-distro login debian --shared-tmp -- apt install -y /tmp/$MESA_PACKAGE" "$(t "MSG_PROOT_MESA_INSTALLATION")"
+            else
+                info_msg "$(t "MSG_PROOT_MESA_ALREADY_INSTALLED")"
+            fi
+            ;;
+        mali)
+            info_msg "$(printf "$(t "MSG_PROOT_GPU_DETECTED")" "$(t "MSG_PROOT_GPU_MALI")")"
+            warning_msg "$(t "MSG_PROOT_GPU_MALI_WARNING")"
+            ;;
+        *)
+            info_msg "$(printf "$(t "MSG_PROOT_GPU_DETECTED")" "$(t "MSG_PROOT_GPU_UNKNOWN")")"
+            warning_msg "$(t "MSG_PROOT_GPU_UNKNOWN_WARNING")"
+            ;;
+    esac
 }
 
 #------------------------------------------------------------------------------
@@ -235,7 +263,7 @@ copy_theme() {
             ;;
     esac
 
-    execute_command "cp -r $PREFIX/share/themes/$theme_path $PREFIX/var/lib/proot-distro/installed-rootfs/debian/usr/share/themes/" "$(t "MSG_PROOT_THEME_CONFIGURATION")"
+    execute_command "cp -r $PREFIX/share/themes/$theme_path $PROOT_DEBIAN_ROOT/usr/share/themes/" "$(t "MSG_PROOT_THEME_CONFIGURATION")"
 }
 
 #------------------------------------------------------------------------------
@@ -263,7 +291,7 @@ copy_icons() {
             ;;
     esac
 
-    execute_command "cp -r $PREFIX/share/icons/$icon_path $PREFIX/var/lib/proot-distro/installed-rootfs/debian/usr/share/icons/" "$(t "MSG_PROOT_ICONS_CONFIGURATION")"
+    execute_command "cp -r $PREFIX/share/icons/$icon_path $PROOT_DEBIAN_ROOT/usr/share/icons/" "$(t "MSG_PROOT_ICONS_CONFIGURATION")"
 }
 
 #------------------------------------------------------------------------------
@@ -271,17 +299,17 @@ copy_icons() {
 #------------------------------------------------------------------------------
 configure_themes_and_icons() {
     # Load configuration from temporary file
-    if [ -f "$HOME/.config/OhMyTermux/theme_config.tmp" ]; then
-        source "$HOME/.config/OhMyTermux/theme_config.tmp"
+    if [ -f "$OHMYTERMUX_CONFIG_DIR/theme_config.tmp" ]; then
+        source "$OHMYTERMUX_CONFIG_DIR/theme_config.tmp"
     fi
 
     # Create necessary directories
     execute_command "
-        mkdir -p \"$PREFIX/var/lib/proot-distro/installed-rootfs/debian/usr/share/themes\"
-        mkdir -p \"$PREFIX/var/lib/proot-distro/installed-rootfs/debian/usr/share/icons\"
-        mkdir -p \"$PREFIX/var/lib/proot-distro/installed-rootfs/debian/usr/share/backgrounds/whitesur\"
-        mkdir -p \"$PREFIX/var/lib/proot-distro/installed-rootfs/debian/home/$USERNAME/.fonts/\"
-        mkdir -p \"$PREFIX/var/lib/proot-distro/installed-rootfs/debian/home/$USERNAME/.themes/\"
+        mkdir -p \"$PROOT_DEBIAN_ROOT/usr/share/themes\"
+        mkdir -p \"$PROOT_DEBIAN_ROOT/usr/share/icons\"
+        mkdir -p \"$PROOT_DEBIAN_ROOT/usr/share/backgrounds/whitesur\"
+        mkdir -p \"$PROOT_DEBIAN_ROOT/home/$USERNAME/.fonts/\"
+        mkdir -p \"$PROOT_DEBIAN_ROOT/home/$USERNAME/.themes/\"
     " "$(t "MSG_PROOT_CREATING_DIRECTORIES")"
 
     # Copy themes if installed
@@ -296,22 +324,22 @@ configure_themes_and_icons() {
 
     # Copy wallpapers if installed
     if [ "$INSTALL_WALLPAPERS" = true ]; then
-        execute_command "cp -r $PREFIX/share/backgrounds/whitesur/* $PREFIX/var/lib/proot-distro/installed-rootfs/debian/usr/share/backgrounds/whitesur/" "$(t "MSG_PROOT_WALLPAPERS_CONFIG")"
+        execute_command "cp -r $PREFIX/share/backgrounds/whitesur/* $PROOT_DEBIAN_ROOT/usr/share/backgrounds/whitesur/" "$(t "MSG_PROOT_WALLPAPERS_CONFIG")"
     fi
 
     # Cursors configuration
     if [ "$INSTALL_CURSORS" = true ]; then
         cd "$PREFIX/share/icons"
-        execute_command "find dist-dark | cpio -pdm \"$PREFIX/var/lib/proot-distro/installed-rootfs/debian/usr/share/icons\"" "$(t "MSG_PROOT_CURSORS_CONFIG")"
+        execute_command "find dist-dark | cpio -pdm \"$PROOT_DEBIAN_ROOT/usr/share/icons\"" "$(t "MSG_PROOT_CURSORS_CONFIG")"
 
         # Xresources configuration
-        cat << EOF > "$PREFIX/var/lib/proot-distro/installed-rootfs/debian/home/$USERNAME/.Xresources"
+        cat << EOF > "$PROOT_DEBIAN_ROOT/home/$USERNAME/.Xresources"
 Xcursor.theme: dist-dark
 EOF
     fi
 
     # Delete the temporary configuration file
-    rm -f "$HOME/.config/OhMyTermux/theme_config.tmp"
+    rm -f "$OHMYTERMUX_CONFIG_DIR/theme_config.tmp"
 }
 
 #------------------------------------------------------------------------------
@@ -396,7 +424,7 @@ execute_command "proot-distro install debian" "$(t "MSG_PROOT_DISTRIBUTION_INSTA
 #------------------------------------------------------------------------------
 # DEBIAN INSTALLATION CHECK
 #------------------------------------------------------------------------------
-if [ ! -d "$PREFIX/var/lib/proot-distro/installed-rootfs/debian" ]; then
+if [ ! -d "$PROOT_DEBIAN_ROOT" ]; then
     error_msg "$(t "MSG_PROOT_DEBIAN_FAILED")"
     exit 1
 fi
