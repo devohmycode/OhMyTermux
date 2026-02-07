@@ -1405,11 +1405,9 @@ install_ai_tools() {
         local -A AI_TOOL_PACKAGES=(
             ["Claude Code"]="@anthropic-ai/claude-code"
             ["Codex"]="@openai/codex"
-            ["Gemini"]="@google/gemini-cli"
-            ["OpenCode"]="opencode-ai"
             ["Amp"]="@sourcegraph/amp"
         )
-        local AI_TOOL_NAMES=("Claude Code" "Codex" "Gemini" "OpenCode" "Amp")
+        local AI_TOOL_NAMES=("Claude Code" "Codex" "Amp")
 
         if $USE_GUM; then
             if $FULL_INSTALL; then
@@ -1419,9 +1417,9 @@ install_ai_tools() {
                     --selected.foreground="33" \
                     --header.foreground="33" \
                     --cursor.foreground="33" \
-                    --height=7 \
+                    --height=5 \
                     --header="$(t MSG_SELECT_AI_TOOLS_GUM)" \
-                    "Claude Code" "Codex" "Gemini" "OpenCode" "Amp" \
+                    "Claude Code" "Codex" "Amp" \
                     "$(t MSG_ALL_AI_TOOLS_INSTALL)")
 
                 if [[ " ${AI_TOOLS[*]} " == *" $(t MSG_ALL_AI_TOOLS_INSTALL) "* ]]; then
@@ -1434,19 +1432,17 @@ install_ai_tools() {
             echo
             echo -e "${COLOR_BLUE}1) Claude Code${COLOR_RESET}"
             echo -e "${COLOR_BLUE}2) Codex${COLOR_RESET}"
-            echo -e "${COLOR_BLUE}3) Gemini${COLOR_RESET}"
-            echo -e "${COLOR_BLUE}4) OpenCode${COLOR_RESET}"
-            echo -e "${COLOR_BLUE}5) Amp${COLOR_RESET}"
-            echo "6) $(t MSG_ALL_AI_TOOLS_INSTALL)"
+            echo -e "${COLOR_BLUE}3) Amp${COLOR_RESET}"
+            echo "4) $(t MSG_ALL_AI_TOOLS_INSTALL)"
             echo
             printf "${COLOR_GOLD}$(t MSG_ENTER_AI_TOOLS_NUMBERS_PROMPT) ${COLOR_RESET}"
             tput setaf 3
             read -r -e -p "" AI_TOOL_CHOICES
             tput sgr0
-            tput cuu 11
+            tput cuu 9
             tput ed
 
-            if [[ "$AI_TOOL_CHOICES" == *"6"* ]]; then
+            if [[ "$AI_TOOL_CHOICES" == *"4"* ]]; then
                 AI_TOOLS=("${AI_TOOL_NAMES[@]}")
             else
                 AI_TOOLS=()
@@ -1454,9 +1450,7 @@ install_ai_tools() {
                     case $CHOICE in
                         1) AI_TOOLS+=("Claude Code") ;;
                         2) AI_TOOLS+=("Codex") ;;
-                        3) AI_TOOLS+=("Gemini") ;;
-                        4) AI_TOOLS+=("OpenCode") ;;
-                        5) AI_TOOLS+=("Amp") ;;
+                        3) AI_TOOLS+=("Amp") ;;
                     esac
                 done
             fi
