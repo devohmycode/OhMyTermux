@@ -9,7 +9,7 @@ SUPPORTED_LANGUAGES=("en" "fr")
 DEFAULT_LANGUAGE="en"
 CURRENT_LANGUAGE=""
 MESSAGES_LOADED=false
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_I18N_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Performance cache
 declare -A TRANSLATION_CACHE
@@ -89,7 +89,7 @@ detect_language() {
 # Loads message files for a given language
 load_messages() {
     local language="$1"
-    local messages_file="$SCRIPT_DIR/messages/${language}.sh"
+    local messages_file="$_I18N_DIR/messages/${language}.sh"
     
     if [ -f "$messages_file" ]; then
         # Load the message file
@@ -99,7 +99,7 @@ load_messages() {
         return 0
     else
         # Fallback to English if file does not exist
-        local fallback_file="$SCRIPT_DIR/messages/$DEFAULT_LANGUAGE.sh"
+        local fallback_file="$_I18N_DIR/messages/$DEFAULT_LANGUAGE.sh"
         if [ -f "$fallback_file" ] && [ "$language" != "$DEFAULT_LANGUAGE" ]; then
             echo "Warning: Message file '$messages_file' not found. Using English." >&2
             source "$fallback_file"

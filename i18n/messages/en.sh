@@ -31,6 +31,7 @@ MSG_OPT_SKIP="Skip initial configuration"
 MSG_OPT_UNINSTALL="Uninstall Debian Proot"
 MSG_OPT_FULL="Install all modules without confirmation"
 MSG_OPT_HELP="Display this help message"
+MSG_OPT_PRESET="Use a predefined installation preset"
 
 # Example usage
 MSG_EXAMPLE_GUM="\$0 --gum                     # Interactive installation with gum"
@@ -276,7 +277,7 @@ MSG_SELECT_AI_TOOLS_TEXT="Select the AI tools to install (separated by spaces) :
 MSG_ENTER_AI_TOOLS_NUMBERS_PROMPT="Enter the AI tools numbers :"
 MSG_ALL_AI_TOOLS_INSTALL="All install"
 MSG_NO_AI_TOOL_SELECTED="No AI tool selected."
-MSG_AI_TOOLS_NODEJS_AUTO="nodejs-lts will be installed automatically (required for AI tools)."
+MSG_AI_TOOLS_NODEJS_AUTO="nodejs-lts will be installed automatically."
 MSG_OPT_AI="Install AI tools module"
 
 # Font installation messages
@@ -539,3 +540,13 @@ MSG_PLUGIN_ENABLED="Plugin enabled:"
 MSG_PLUGIN_NO_SELECTION="No plugin selected."
 MSG_PLUGIN_SYSTEM_INIT="Plugin system initialization"
 MSG_PLUGIN_EXECUTION="Plugin execution"
+
+# Preset messages
+MSG_ERROR_PRESET_ARGUMENT="Error: --preset requires a preset name (e.g., --preset python-dev)"
+MSG_ERROR_PRESET_NOT_FOUND="Error: Preset not found:"
+MSG_SELECT_PRESET_OR_MANUAL="Select an installation preset or choose manual selection :"
+MSG_PRESET_CUSTOM_SELECTION="Custom selection"
+MSG_PRESET_APPLYING="Applying preset:"
+MSG_PRESET_AVAILABLE="Available presets:"
+MSG_PRESET_PACKAGES="Packages:"
+MSG_PRESET_CONFIRM_SELECTION="Confirm selection? (Y/n/edit):"

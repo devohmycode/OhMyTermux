@@ -10,7 +10,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # GLOBAL VARIABLES
 #------------------------------------------------------------------------------
 # GitHub branch for downloads
-BRANCH="1.1.02"
+BRANCH="1.2.1"
 
 # Interactive interface with gum
 USE_GUM=false
@@ -52,6 +52,9 @@ AI_TOOLS_CHOICE=false
 # Full installation without interactions
 FULL_INSTALL=false
 
+# Preset name argument
+PRESET_NAME_ARG=""
+
 # Use gum for interactions
 ONLY_GUM=true
 
@@ -65,6 +68,7 @@ FISHRC="$HOME/.config/fish/config.fish"
 #------------------------------------------------------------------------------
 # BOOTSTRAP - Load i18n and lib systems
 #------------------------------------------------------------------------------
+OHMYTERMUX_REPO_URL="${OHMYTERMUX_REPO_URL:-https://raw.githubusercontent.com/devohmycode/OhMyTermux}"
 _loader_url="$OHMYTERMUX_REPO_URL/$BRANCH/lib/i18n_loader.sh"
 mkdir -p "$SCRIPT_DIR/lib"
 if [ ! -f "$SCRIPT_DIR/lib/i18n_loader.sh" ]; then
@@ -76,6 +80,11 @@ source "$SCRIPT_DIR/lib/i18n_loader.sh"
 # Configure error handler keys for this script
 ERROR_MSG_KEY="MSG_ERROR_INSTALL"
 ERROR_REFER_KEY="MSG_ERROR_REFER_MESSAGES"
+
+# Download presets if not available locally
+if [ ! -d "$SCRIPT_DIR/presets" ] || [ -z "$(ls "$SCRIPT_DIR/presets/"*.sh 2>/dev/null)" ]; then
+    type download_presets &>/dev/null && download_presets
+fi
 
 # Initialize plugin system (discover manifests, resolve order)
 type init_plugin_system &>/dev/null && init_plugin_system
@@ -151,6 +160,7 @@ show_help() {
     echo "  --xfce | -x       $(t MSG_OPT_XFCE)"
     echo "  --proot | -pr     $(t MSG_OPT_PROOT)"
     echo "  --x11             $(t MSG_OPT_X11)"
+    echo "  --preset | -ps    $(t MSG_OPT_PRESET)"
     echo "  --skip            $(t MSG_OPT_SKIP)"
     echo "  --uninstall       $(t MSG_OPT_UNINSTALL)"
     echo "  --full            $(t MSG_OPT_FULL)"
@@ -211,6 +221,18 @@ while [[ $# -gt 0 ]]; do
             X11_CHOICE=true
             ONLY_GUM=false
             shift
+            ;;
+        --preset|-ps)
+            shift
+            if [ -n "$1" ]; then
+                PRESET_NAME_ARG="$1"
+                PACKAGES_CHOICE=true
+                ONLY_GUM=false
+                shift
+            else
+                echo "$(t MSG_ERROR_PRESET_ARGUMENT)" >&2
+                exit 1
+            fi
             ;;
         --skip)
             EXECUTE_INITIAL_CONFIG=false
@@ -320,6 +342,27 @@ fi
 # Initialisation du système d'internationalisation
 if ! init_i18n "$OVERRIDE_LANG"; then
     echo "Warning: Problem during i18n system initialization. Using default messages." >&2
+fi
+
+# Fallback: force-load messages if i18n system failed
+if [ "$MESSAGES_LOADED" != "true" ]; then
+    for _msg_path in "$SCRIPT_DIR/i18n/messages" "$(dirname "${BASH_SOURCE[0]}")/i18n/messages"; do
+        if [ -f "$_msg_path/en.sh" ]; then
+            source "$_msg_path/en.sh"
+            MESSAGES_LOADED=true
+            CURRENT_LANGUAGE="en"
+            break
+        fi
+    done
+    # Redefine t() to use indirect variable lookup if the fallback t() is active
+    if [ "$MESSAGES_LOADED" = "true" ]; then
+        t() {
+            local key="$1"
+            local default="$2"
+            local val="${!key}"
+            echo "${val:-${default:-$key}}"
+        }
+    fi
 fi
 
 # Set banner title now that i18n is initialized
@@ -1239,91 +1282,309 @@ update_zshrc() {
 }
 
 #------------------------------------------------------------------------------
+# PRESET HELPERS
+#------------------------------------------------------------------------------
+
+# Built-in preset definitions
+declare -A BUILTIN_PRESET_DESCRIPTIONS=(
+    ["Minimal"]="Essential tools only"
+    ["Python Development"]="Python development environment"
+    ["Web Development"]="Web/Node.js development environment"
+    ["C/C++ Development"]="C/C++ development environment"
+    ["Android Development"]="Android development environment"
+    ["SysAdmin"]="System administration tools"
+)
+declare -A BUILTIN_PRESET_PACKAGES=(
+    ["Minimal"]="nala eza bat fzf"
+    ["Python Development"]="python neovim fzf bat eza nala glow lazygit"
+    ["Web Development"]="nodejs nodejs-lts python neovim fzf bat eza nala lazygit glow"
+    ["C/C++ Development"]="clang cmake make neovim fzf bat eza nala lazygit"
+    ["Android Development"]="python nodejs-lts neovim git fzf bat eza nala open-ssh"
+    ["SysAdmin"]="nala tmux open-ssh tsu fzf bat eza vim lazygit"
+)
+BUILTIN_PRESET_ORDER=("Minimal" "Python Development" "Web Development" "C/C++ Development" "Android Development" "SysAdmin")
+
+# Load all available presets into arrays
+load_available_presets() {
+    AVAILABLE_PRESETS=()
+    AVAILABLE_PRESET_DESCRIPTIONS=()
+    AVAILABLE_PRESET_PACKAGES_MAP=()
+
+    # Load from external files if available
+    local found_files=false
+    for preset_file in "$SCRIPT_DIR"/presets/*.sh; do
+        [ -f "$preset_file" ] || continue
+        found_files=true
+        source "$preset_file"
+        [ -n "$PRESET_NAME" ] || continue
+        AVAILABLE_PRESETS+=("$PRESET_NAME")
+        AVAILABLE_PRESET_DESCRIPTIONS+=("$PRESET_DESCRIPTION")
+        AVAILABLE_PRESET_PACKAGES_MAP+=("${PRESET_PACKAGES[*]}")
+    done
+
+    # Fallback to built-in presets if no files found
+    if ! $found_files; then
+        for preset_name in "${BUILTIN_PRESET_ORDER[@]}"; do
+            AVAILABLE_PRESETS+=("$preset_name")
+            AVAILABLE_PRESET_DESCRIPTIONS+=("${BUILTIN_PRESET_DESCRIPTIONS[$preset_name]}")
+            AVAILABLE_PRESET_PACKAGES_MAP+=("${BUILTIN_PRESET_PACKAGES[$preset_name]}")
+        done
+    fi
+}
+
+# Load a specific preset by name and set PRESET_PACKAGES
+load_preset_packages() {
+    local preset_name="$1"
+    local idx
+    for idx in "${!AVAILABLE_PRESETS[@]}"; do
+        if [ "${AVAILABLE_PRESETS[$idx]}" = "$preset_name" ]; then
+            IFS=' ' read -r -a PRESET_PACKAGES <<< "${AVAILABLE_PRESET_PACKAGES_MAP[$idx]}"
+            PRESET_NAME="$preset_name"
+            PRESET_DESCRIPTION="${AVAILABLE_PRESET_DESCRIPTIONS[$idx]}"
+            return 0
+        fi
+    done
+    return 1
+}
+
+# Load a specific preset by file name (without extension) - CLI usage
+load_preset() {
+    local preset_id="$1"
+    local preset_file="$SCRIPT_DIR/presets/${preset_id}.sh"
+    if [ -f "$preset_file" ]; then
+        source "$preset_file"
+        return 0
+    fi
+    # Fallback: try built-in presets by matching id
+    for preset_name in "${BUILTIN_PRESET_ORDER[@]}"; do
+        local normalized="${preset_name,,}"
+        normalized="${normalized// /-}"
+        if [ "$normalized" = "$preset_id" ]; then
+            IFS=' ' read -r -a PRESET_PACKAGES <<< "${BUILTIN_PRESET_PACKAGES[$preset_name]}"
+            PRESET_NAME="$preset_name"
+            PRESET_DESCRIPTION="${BUILTIN_PRESET_DESCRIPTIONS[$preset_name]}"
+            return 0
+        fi
+    done
+    return 1
+}
+
+#------------------------------------------------------------------------------
 # INSTALLATION OF ADDITIONAL PACKAGES
 #------------------------------------------------------------------------------
 install_packages() {
     if $PACKAGES_CHOICE; then
-        title_msg "$(t MSG_CONFIG_PACKAGES)"
+        title_msg "$(t MSG_CONFIG_PACKAGES "❯ Package configuration")"
         local DEFAULT_PACKAGES=("nala" "eza" "bat" "lf" "fzf")
+
+        # All available packages
+        local ALL_PKG_LIST=("nala" "eza" "colorls" "lsd" "bat" "lf" "fzf" "glow" "tmux" "python" \
+                "nodejs" "nodejs-lts" "micro" "vim" "neovim" "lazygit" "open-ssh" "tsu" \
+                "clang" "cmake" "make")
+
+        # Determine preset packages (if any)
+        local PRESET_LOADED=false
+        local -a PRESET_PKG_LIST=()
+
+        if [ -n "$PRESET_NAME_ARG" ]; then
+            # --preset provided via CLI
+            if load_preset "$PRESET_NAME_ARG"; then
+                PRESET_PKG_LIST=("${PRESET_PACKAGES[@]}")
+                PRESET_LOADED=true
+                info_msg "$(t MSG_PRESET_APPLYING "Applying preset:") $PRESET_NAME"
+            else
+                echo "$(t MSG_ERROR_PRESET_NOT_FOUND "Error: Preset not found:") $PRESET_NAME_ARG" >&2
+                exit 1
+            fi
+        fi
 
         if $USE_GUM; then
             if $FULL_INSTALL; then
-                PACKAGES=("${DEFAULT_PACKAGES[@]}")
+                if $PRESET_LOADED; then
+                    PACKAGES=("${PRESET_PKG_LIST[@]}")
+                else
+                    PACKAGES=("${DEFAULT_PACKAGES[@]}")
+                fi
             else
+                # If no preset loaded via CLI, show preset selection menu
+                if ! $PRESET_LOADED; then
+                    load_available_presets
+                    if [ ${#AVAILABLE_PRESETS[@]} -gt 0 ]; then
+                        local PRESET_OPTIONS=()
+                        for i in "${!AVAILABLE_PRESETS[@]}"; do
+                            PRESET_OPTIONS+=("${AVAILABLE_PRESETS[$i]} - ${AVAILABLE_PRESET_DESCRIPTIONS[$i]}")
+                        done
+                        local CUSTOM_LABEL
+                        CUSTOM_LABEL="$(t MSG_PRESET_CUSTOM_SELECTION "Custom selection")"
+                        PRESET_OPTIONS+=("$CUSTOM_LABEL")
+
+                        local PRESET_SELECTION
+                        PRESET_SELECTION=$(printf '%s\n' "${PRESET_OPTIONS[@]}" | gum choose \
+                            --selected.foreground="33" \
+                            --header.foreground="33" \
+                            --cursor.foreground="33" \
+                            --header="$(t MSG_SELECT_PRESET_OR_MANUAL "Select an installation preset:")")
+
+                        if [ "$PRESET_SELECTION" != "$CUSTOM_LABEL" ] && [ -n "$PRESET_SELECTION" ]; then
+                            # Extract preset name (before " - ")
+                            local SELECTED_PRESET_NAME="${PRESET_SELECTION%% - *}"
+                            if load_preset_packages "$SELECTED_PRESET_NAME"; then
+                                PRESET_PKG_LIST=("${PRESET_PACKAGES[@]}")
+                                PRESET_LOADED=true
+                                info_msg "$(t MSG_PRESET_APPLYING "Applying preset:") $PRESET_NAME"
+                            fi
+                        fi
+                    fi
+                fi
+
+                # Build --selected flags for gum choose
+                local GUM_SELECTED_ARGS=()
+                if $PRESET_LOADED; then
+                    for pkg in "${PRESET_PKG_LIST[@]}"; do
+                        GUM_SELECTED_ARGS+=(--selected="$pkg")
+                    done
+                else
+                    GUM_SELECTED_ARGS=(--selected="nala" --selected="eza" --selected="bat" --selected="lf" --selected="fzf")
+                fi
+
                 # Convert output of gum to array
+                local ALL_PKG_LABEL
+                ALL_PKG_LABEL="$(t MSG_ALL_INSTALL "Install all")"
+
                 IFS=$'\n' read -r -d '' -a PACKAGES < <(gum choose --no-limit \
                     --selected.foreground="33" \
                     --header.foreground="33" \
                     --cursor.foreground="33" \
-                    --height=18 \
-                    --header="$(t MSG_SELECT_PACKAGES_GUM)" \
-                    --selected="nala" --selected="eza" --selected="bat" --selected="lf" --selected="fzf" \
+                    --height=21 \
+                    --header="$(t MSG_SELECT_PACKAGES_GUM "Select packages to install:")" \
+                    "${GUM_SELECTED_ARGS[@]}" \
                     "nala" "eza" "colorls" "lsd" "bat" "lf" "fzf" "glow" "tmux" "python" \
                     "nodejs" "nodejs-lts" "micro" "vim" "neovim" "lazygit" "open-ssh" "tsu" \
-                    "$(t MSG_ALL_INSTALL)")
+                    "clang" "cmake" "make" \
+                    "$ALL_PKG_LABEL")
 
-                if [[ " ${PACKAGES[*]} " == *" $(t MSG_ALL_INSTALL) "* ]]; then
-                    PACKAGES=("nala" "eza" "colorls" "lsd" "bat" "lf" "fzf" "glow" "tmux" "python" \
-                            "nodejs" "nodejs-lts" "micro" "vim" "neovim" "lazygit" "open-ssh" "tsu")
+                if [[ " ${PACKAGES[*]} " == *" $ALL_PKG_LABEL "* ]]; then
+                    PACKAGES=("${ALL_PKG_LIST[@]}")
                 fi
             fi
         else
-            echo "$(t MSG_SELECT_PACKAGES_TEXT)"
-            echo
-            echo -e "${COLOR_BLUE}1)  nala${COLOR_RESET}"
-            echo -e "${COLOR_BLUE}2)  eza${COLOR_RESET}"
-            echo -e "${COLOR_BLUE}3)  colorls${COLOR_RESET}"
-            echo -e "${COLOR_BLUE}4)  lsd${COLOR_RESET}"
-            echo -e "${COLOR_BLUE}5)  bat${COLOR_RESET}"
-            echo -e "${COLOR_BLUE}6)  lf${COLOR_RESET}"
-            echo -e "${COLOR_BLUE}7)  fzf${COLOR_RESET}"
-            echo -e "${COLOR_BLUE}8)  glow${COLOR_RESET}"
-            echo -e "${COLOR_BLUE}9)  tmux${COLOR_RESET}"
-            echo -e "${COLOR_BLUE}10) python${COLOR_RESET}"
-            echo -e "${COLOR_BLUE}11) nodejs${COLOR_RESET}"
-            echo -e "${COLOR_BLUE}12) nodejs-lts${COLOR_RESET}"
-            echo -e "${COLOR_BLUE}13) micro${COLOR_RESET}"
-            echo -e "${COLOR_BLUE}14) vim${COLOR_RESET}"
-            echo -e "${COLOR_BLUE}15) neovim${COLOR_RESET}"
-            echo -e "${COLOR_BLUE}16) lazygit${COLOR_RESET}"
-            echo -e "${COLOR_BLUE}17) open-ssh${COLOR_RESET}"
-            echo -e "${COLOR_BLUE}18) tsu${COLOR_RESET}"
-            echo "19) $(t MSG_ALL_INSTALL)"
-            echo
-            printf "${COLOR_GOLD}$(t MSG_ENTER_PACKAGE_NUMBERS_PROMPT) ${COLOR_RESET}"
-            tput setaf 3
-            read -r -e -p "" -i "1 2 5 6 7" PACKAGE_CHOICES
-            tput sgr0
-            tput cuu 23
-            tput ed
+            # Text mode - show preset selection first
+            if ! $PRESET_LOADED; then
+                load_available_presets
+                if [ ${#AVAILABLE_PRESETS[@]} -gt 0 ]; then
+                    echo "$(t MSG_PRESET_AVAILABLE "Available presets:")"
+                    echo
+                    local idx=1
+                    for i in "${!AVAILABLE_PRESETS[@]}"; do
+                        echo -e "${COLOR_BLUE}${idx}) ${AVAILABLE_PRESETS[$i]} - ${AVAILABLE_PRESET_DESCRIPTIONS[$i]}${COLOR_RESET}"
+                        idx=$((idx + 1))
+                    done
+                    echo -e "${COLOR_BLUE}${idx}) $(t MSG_PRESET_CUSTOM_SELECTION "Custom selection")${COLOR_RESET}"
+                    echo
+                    local TOTAL_OPTIONS=$idx
+                    printf "${COLOR_GOLD}$(t MSG_ENTER_CHOICE_123 "Enter your choice:") ${COLOR_RESET}"
+                    tput setaf 3
+                    read -r -e -p "" -i "$TOTAL_OPTIONS" PRESET_CHOICE
+                    tput sgr0
+                    # Clear the preset menu
+                    tput cuu $((TOTAL_OPTIONS + 3))
+                    tput ed
 
-            if [[ "$PACKAGE_CHOICES" == *"19"* ]]; then
-                PACKAGES=("nala" "eza" "colorls" "lsd" "bat" "lf" "fzf" "glow" "tmux" "python" \
-                        "nodejs" "nodejs-lts" "micro" "vim" "neovim" "lazygit" "open-ssh" "tsu")
-            else
-                PACKAGES=()
-                for CHOICE in $PACKAGE_CHOICES; do
-                    case $CHOICE in
-                        1) PACKAGES+=("nala") ;;
-                        2) PACKAGES+=("eza") ;;
-                        3) PACKAGES+=("colorls") ;;
-                        4) PACKAGES+=("lsd") ;;
-                        5) PACKAGES+=("bat") ;;
-                        6) PACKAGES+=("lf") ;;
-                        7) PACKAGES+=("fzf") ;;
-                        8) PACKAGES+=("glow") ;;
-                        9) PACKAGES+=("tmux") ;;
-                        10) PACKAGES+=("python") ;;
-                        11) PACKAGES+=("nodejs") ;;
-                        12) PACKAGES+=("nodejs-lts") ;;
-                        13) PACKAGES+=("micro") ;;
-                        14) PACKAGES+=("vim") ;;
-                        15) PACKAGES+=("neovim") ;;
-                        16) PACKAGES+=("lazygit") ;;
-                        17) PACKAGES+=("open-ssh") ;;
-                        18) PACKAGES+=("tsu") ;;
-                    esac
-                done
+                    if [ "$PRESET_CHOICE" -ge 1 ] 2>/dev/null && [ "$PRESET_CHOICE" -lt "$TOTAL_OPTIONS" ] 2>/dev/null; then
+                        local CHOSEN_IDX=$((PRESET_CHOICE - 1))
+                        if load_preset_packages "${AVAILABLE_PRESETS[$CHOSEN_IDX]}"; then
+                            PRESET_PKG_LIST=("${PRESET_PACKAGES[@]}")
+                            PRESET_LOADED=true
+                            info_msg "$(t MSG_PRESET_APPLYING "Applying preset:") $PRESET_NAME"
+                        fi
+                    fi
+                fi
+            fi
+
+            if $PRESET_LOADED; then
+                # Show preset packages and ask for confirmation or editing
+                echo -e "${COLOR_BLUE}$(t MSG_PRESET_PACKAGES) ${PRESET_PKG_LIST[*]}${COLOR_RESET}"
+                echo
+                printf "${COLOR_GOLD}$(t MSG_PRESET_CONFIRM_SELECTION) ${COLOR_RESET}"
+                tput setaf 3
+                read -r -e -p "" -i "Y" CONFIRM_CHOICE
+                tput sgr0
+                tput cuu 3
+                tput ed
+
+                if [[ "$CONFIRM_CHOICE" =~ ^[yYoO]$ ]]; then
+                    PACKAGES=("${PRESET_PKG_LIST[@]}")
+                elif [[ "$CONFIRM_CHOICE" == "edit" ]]; then
+                    # Fall through to manual selection with preset defaults
+                    PRESET_LOADED=false
+                else
+                    PACKAGES=()
+                fi
+            fi
+
+            if ! $PRESET_LOADED && [ ${#PACKAGES[@]} -eq 0 ]; then
+                echo "$(t MSG_SELECT_PACKAGES_TEXT "Select packages to install (space-separated):")"
+                echo
+                echo -e "${COLOR_BLUE}1)  nala${COLOR_RESET}"
+                echo -e "${COLOR_BLUE}2)  eza${COLOR_RESET}"
+                echo -e "${COLOR_BLUE}3)  colorls${COLOR_RESET}"
+                echo -e "${COLOR_BLUE}4)  lsd${COLOR_RESET}"
+                echo -e "${COLOR_BLUE}5)  bat${COLOR_RESET}"
+                echo -e "${COLOR_BLUE}6)  lf${COLOR_RESET}"
+                echo -e "${COLOR_BLUE}7)  fzf${COLOR_RESET}"
+                echo -e "${COLOR_BLUE}8)  glow${COLOR_RESET}"
+                echo -e "${COLOR_BLUE}9)  tmux${COLOR_RESET}"
+                echo -e "${COLOR_BLUE}10) python${COLOR_RESET}"
+                echo -e "${COLOR_BLUE}11) nodejs${COLOR_RESET}"
+                echo -e "${COLOR_BLUE}12) nodejs-lts${COLOR_RESET}"
+                echo -e "${COLOR_BLUE}13) micro${COLOR_RESET}"
+                echo -e "${COLOR_BLUE}14) vim${COLOR_RESET}"
+                echo -e "${COLOR_BLUE}15) neovim${COLOR_RESET}"
+                echo -e "${COLOR_BLUE}16) lazygit${COLOR_RESET}"
+                echo -e "${COLOR_BLUE}17) open-ssh${COLOR_RESET}"
+                echo -e "${COLOR_BLUE}18) tsu${COLOR_RESET}"
+                echo -e "${COLOR_BLUE}19) clang${COLOR_RESET}"
+                echo -e "${COLOR_BLUE}20) cmake${COLOR_RESET}"
+                echo -e "${COLOR_BLUE}21) make${COLOR_RESET}"
+                echo "22) $(t MSG_ALL_INSTALL "Install all")"
+                echo
+                printf "${COLOR_GOLD}$(t MSG_ENTER_PACKAGE_NUMBERS_PROMPT) ${COLOR_RESET}"
+                tput setaf 3
+                read -r -e -p "" -i "1 2 5 6 7" PACKAGE_CHOICES
+                tput sgr0
+                tput cuu 26
+                tput ed
+
+                if [[ "$PACKAGE_CHOICES" == *"22"* ]]; then
+                    PACKAGES=("${ALL_PKG_LIST[@]}")
+                else
+                    PACKAGES=()
+                    for CHOICE in $PACKAGE_CHOICES; do
+                        case $CHOICE in
+                            1) PACKAGES+=("nala") ;;
+                            2) PACKAGES+=("eza") ;;
+                            3) PACKAGES+=("colorls") ;;
+                            4) PACKAGES+=("lsd") ;;
+                            5) PACKAGES+=("bat") ;;
+                            6) PACKAGES+=("lf") ;;
+                            7) PACKAGES+=("fzf") ;;
+                            8) PACKAGES+=("glow") ;;
+                            9) PACKAGES+=("tmux") ;;
+                            10) PACKAGES+=("python") ;;
+                            11) PACKAGES+=("nodejs") ;;
+                            12) PACKAGES+=("nodejs-lts") ;;
+                            13) PACKAGES+=("micro") ;;
+                            14) PACKAGES+=("vim") ;;
+                            15) PACKAGES+=("neovim") ;;
+                            16) PACKAGES+=("lazygit") ;;
+                            17) PACKAGES+=("open-ssh") ;;
+                            18) PACKAGES+=("tsu") ;;
+                            19) PACKAGES+=("clang") ;;
+                            20) PACKAGES+=("cmake") ;;
+                            21) PACKAGES+=("make") ;;
+                        esac
+                    done
+                fi
             fi
         fi
 
@@ -1398,17 +1659,17 @@ EOL
 #------------------------------------------------------------------------------
 install_ai_tools() {
     if $AI_TOOLS_CHOICE; then
-        title_msg "$(t MSG_CONFIG_AI_TOOLS)"
+        title_msg "$(t MSG_CONFIG_AI_TOOLS "❯ Configuration of AI Tools")"
 
         # Define AI tools with their npm package names
         local -A AI_TOOL_PACKAGES=(
             ["Claude Code"]="@anthropic-ai/claude-code"
             ["Codex"]="@openai/codex"
-            ["Gemini"]="@google/gemini-cli"
-            ["OpenCode"]="opencode-ai"
             ["Amp"]="@sourcegraph/amp"
         )
-        local AI_TOOL_NAMES=("Claude Code" "Codex" "Gemini" "OpenCode" "Amp")
+        local AI_TOOL_NAMES=("Claude Code" "Codex" "Amp")
+        local ALL_AI_LABEL
+        ALL_AI_LABEL="$(t MSG_ALL_AI_TOOLS_INSTALL "Install all")"
 
         if $USE_GUM; then
             if $FULL_INSTALL; then
@@ -1418,34 +1679,32 @@ install_ai_tools() {
                     --selected.foreground="33" \
                     --header.foreground="33" \
                     --cursor.foreground="33" \
-                    --height=7 \
-                    --header="$(t MSG_SELECT_AI_TOOLS_GUM)" \
-                    "Claude Code" "Codex" "Gemini" "OpenCode" "Amp" \
-                    "$(t MSG_ALL_AI_TOOLS_INSTALL)")
+                    --height=5 \
+                    --header="$(t MSG_SELECT_AI_TOOLS_GUM "Select AI tools to install:")" \
+                    "Claude Code" "Codex" "Amp" \
+                    "$ALL_AI_LABEL")
 
-                if [[ " ${AI_TOOLS[*]} " == *" $(t MSG_ALL_AI_TOOLS_INSTALL) "* ]]; then
+                if [[ " ${AI_TOOLS[*]} " == *" $ALL_AI_LABEL "* ]]; then
                     AI_TOOLS=("${AI_TOOL_NAMES[@]}")
                 fi
             fi
         else
             # Text mode
-            echo "$(t MSG_SELECT_AI_TOOLS_TEXT)"
+            echo "$(t MSG_SELECT_AI_TOOLS_TEXT "Select AI tools to install (space-separated):")"
             echo
             echo -e "${COLOR_BLUE}1) Claude Code${COLOR_RESET}"
             echo -e "${COLOR_BLUE}2) Codex${COLOR_RESET}"
-            echo -e "${COLOR_BLUE}3) Gemini${COLOR_RESET}"
-            echo -e "${COLOR_BLUE}4) OpenCode${COLOR_RESET}"
-            echo -e "${COLOR_BLUE}5) Amp${COLOR_RESET}"
-            echo "6) $(t MSG_ALL_AI_TOOLS_INSTALL)"
+            echo -e "${COLOR_BLUE}3) Amp${COLOR_RESET}"
+            echo "4) $ALL_AI_LABEL"
             echo
-            printf "${COLOR_GOLD}$(t MSG_ENTER_AI_TOOLS_NUMBERS_PROMPT) ${COLOR_RESET}"
+            printf "${COLOR_GOLD}$(t MSG_ENTER_AI_TOOLS_NUMBERS_PROMPT "Enter AI tools numbers:") ${COLOR_RESET}"
             tput setaf 3
             read -r -e -p "" AI_TOOL_CHOICES
             tput sgr0
-            tput cuu 11
+            tput cuu 9
             tput ed
 
-            if [[ "$AI_TOOL_CHOICES" == *"6"* ]]; then
+            if [[ "$AI_TOOL_CHOICES" == *"4"* ]]; then
                 AI_TOOLS=("${AI_TOOL_NAMES[@]}")
             else
                 AI_TOOLS=()
@@ -1453,9 +1712,7 @@ install_ai_tools() {
                     case $CHOICE in
                         1) AI_TOOLS+=("Claude Code") ;;
                         2) AI_TOOLS+=("Codex") ;;
-                        3) AI_TOOLS+=("Gemini") ;;
-                        4) AI_TOOLS+=("OpenCode") ;;
-                        5) AI_TOOLS+=("Amp") ;;
+                        3) AI_TOOLS+=("Amp") ;;
                     esac
                 done
             fi
@@ -2026,6 +2283,11 @@ fi
 # Copy plugins to config directory
 if [ -d "$SCRIPT_DIR/plugins" ]; then
     cp -rf "$SCRIPT_DIR/plugins" "$OHMYTERMUX_CONFIG_DIR/" >/dev/null 2>&1
+fi
+
+# Copy presets to config directory
+if [ -d "$SCRIPT_DIR/presets" ]; then
+    cp -rf "$SCRIPT_DIR/presets" "$OHMYTERMUX_CONFIG_DIR/" >/dev/null 2>&1
 fi
 
 type run_hook &>/dev/null && run_hook "post_cleanup"

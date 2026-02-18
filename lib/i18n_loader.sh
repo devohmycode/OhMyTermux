@@ -48,7 +48,12 @@ if [ ! -f "$SCRIPT_DIR/i18n/i18n.sh" ] || ! _validate_script "$SCRIPT_DIR/i18n/i
         echo "i18n system downloaded and loaded successfully." >&2
     else
         echo "Error: Could not download i18n system. Using fallback messages." >&2
-        t() { echo "$1"; }
+        t() {
+            local key="$1"
+            local default="$2"
+            local val="${!key}"
+            echo "${val:-${default:-$key}}"
+        }
         init_i18n() { return 0; }
         MESSAGES_LOADED="fallback"
     fi
