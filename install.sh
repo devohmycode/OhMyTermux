@@ -1391,9 +1391,9 @@ install_packages() {
             if load_preset "$PRESET_NAME_ARG"; then
                 PRESET_PKG_LIST=("${PRESET_PACKAGES[@]}")
                 PRESET_LOADED=true
-                info_msg "$(t MSG_PRESET_APPLYING) $PRESET_NAME"
+                info_msg "$(t MSG_PRESET_APPLYING "Applying preset:") $PRESET_NAME"
             else
-                echo "$(t MSG_ERROR_PRESET_NOT_FOUND) $PRESET_NAME_ARG" >&2
+                echo "$(t MSG_ERROR_PRESET_NOT_FOUND "Error: Preset not found:") $PRESET_NAME_ARG" >&2
                 exit 1
             fi
         fi
@@ -1431,7 +1431,7 @@ install_packages() {
                             if load_preset_packages "$SELECTED_PRESET_NAME"; then
                                 PRESET_PKG_LIST=("${PRESET_PACKAGES[@]}")
                                 PRESET_LOADED=true
-                                info_msg "$(t MSG_PRESET_APPLYING) $PRESET_NAME"
+                                info_msg "$(t MSG_PRESET_APPLYING "Applying preset:") $PRESET_NAME"
                             fi
                         fi
                     fi
@@ -1495,7 +1495,7 @@ install_packages() {
                         if load_preset_packages "${AVAILABLE_PRESETS[$CHOSEN_IDX]}"; then
                             PRESET_PKG_LIST=("${PRESET_PACKAGES[@]}")
                             PRESET_LOADED=true
-                            info_msg "$(t MSG_PRESET_APPLYING) $PRESET_NAME"
+                            info_msg "$(t MSG_PRESET_APPLYING "Applying preset:") $PRESET_NAME"
                         fi
                     fi
                 fi
