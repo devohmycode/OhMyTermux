@@ -10,7 +10,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # GLOBAL VARIABLES
 #------------------------------------------------------------------------------
 # GitHub branch for downloads
-BRANCH="1.1.02"
+BRANCH="1.2.1"
 
 # Interactive interface with gum
 USE_GUM=false
@@ -342,6 +342,27 @@ fi
 # Initialisation du système d'internationalisation
 if ! init_i18n "$OVERRIDE_LANG"; then
     echo "Warning: Problem during i18n system initialization. Using default messages." >&2
+fi
+
+# Fallback: force-load messages if i18n system failed
+if [ "$MESSAGES_LOADED" != "true" ]; then
+    for _msg_path in "$SCRIPT_DIR/i18n/messages" "$(dirname "${BASH_SOURCE[0]}")/i18n/messages"; do
+        if [ -f "$_msg_path/en.sh" ]; then
+            source "$_msg_path/en.sh"
+            MESSAGES_LOADED=true
+            CURRENT_LANGUAGE="en"
+            break
+        fi
+    done
+    # Redefine t() to use indirect variable lookup if the fallback t() is active
+    if [ "$MESSAGES_LOADED" = "true" ]; then
+        t() {
+            local key="$1"
+            local default="$2"
+            local val="${!key}"
+            echo "${val:-${default:-$key}}"
+        }
+    fi
 fi
 
 # Set banner title now that i18n is initialized
@@ -1353,7 +1374,7 @@ load_preset() {
 #------------------------------------------------------------------------------
 install_packages() {
     if $PACKAGES_CHOICE; then
-        title_msg "$(t MSG_CONFIG_PACKAGES)"
+        title_msg "$(t MSG_CONFIG_PACKAGES "❯ Package configuration")"
         local DEFAULT_PACKAGES=("nala" "eza" "bat" "lf" "fzf")
 
         # All available packages
@@ -1393,16 +1414,18 @@ install_packages() {
                         for i in "${!AVAILABLE_PRESETS[@]}"; do
                             PRESET_OPTIONS+=("${AVAILABLE_PRESETS[$i]} - ${AVAILABLE_PRESET_DESCRIPTIONS[$i]}")
                         done
-                        PRESET_OPTIONS+=("$(t MSG_PRESET_CUSTOM_SELECTION)")
+                        local CUSTOM_LABEL
+                        CUSTOM_LABEL="$(t MSG_PRESET_CUSTOM_SELECTION "Custom selection")"
+                        PRESET_OPTIONS+=("$CUSTOM_LABEL")
 
                         local PRESET_SELECTION
                         PRESET_SELECTION=$(printf '%s\n' "${PRESET_OPTIONS[@]}" | gum choose \
                             --selected.foreground="33" \
                             --header.foreground="33" \
                             --cursor.foreground="33" \
-                            --header="$(t MSG_SELECT_PRESET_OR_MANUAL)")
+                            --header="$(t MSG_SELECT_PRESET_OR_MANUAL "Select an installation preset:")")
 
-                        if [ "$PRESET_SELECTION" != "$(t MSG_PRESET_CUSTOM_SELECTION)" ] && [ -n "$PRESET_SELECTION" ]; then
+                        if [ "$PRESET_SELECTION" != "$CUSTOM_LABEL" ] && [ -n "$PRESET_SELECTION" ]; then
                             # Extract preset name (before " - ")
                             local SELECTED_PRESET_NAME="${PRESET_SELECTION%% - *}"
                             if load_preset_packages "$SELECTED_PRESET_NAME"; then
@@ -1425,19 +1448,22 @@ install_packages() {
                 fi
 
                 # Convert output of gum to array
+                local ALL_PKG_LABEL
+                ALL_PKG_LABEL="$(t MSG_ALL_INSTALL "Install all")"
+
                 IFS=$'\n' read -r -d '' -a PACKAGES < <(gum choose --no-limit \
                     --selected.foreground="33" \
                     --header.foreground="33" \
                     --cursor.foreground="33" \
                     --height=21 \
-                    --header="$(t MSG_SELECT_PACKAGES_GUM)" \
+                    --header="$(t MSG_SELECT_PACKAGES_GUM "Select packages to install:")" \
                     "${GUM_SELECTED_ARGS[@]}" \
                     "nala" "eza" "colorls" "lsd" "bat" "lf" "fzf" "glow" "tmux" "python" \
                     "nodejs" "nodejs-lts" "micro" "vim" "neovim" "lazygit" "open-ssh" "tsu" \
                     "clang" "cmake" "make" \
-                    "$(t MSG_ALL_INSTALL)")
+                    "$ALL_PKG_LABEL")
 
-                if [[ " ${PACKAGES[*]} " == *" $(t MSG_ALL_INSTALL) "* ]]; then
+                if [[ " ${PACKAGES[*]} " == *" $ALL_PKG_LABEL "* ]]; then
                     PACKAGES=("${ALL_PKG_LIST[@]}")
                 fi
             fi
@@ -1446,17 +1472,17 @@ install_packages() {
             if ! $PRESET_LOADED; then
                 load_available_presets
                 if [ ${#AVAILABLE_PRESETS[@]} -gt 0 ]; then
-                    echo "$(t MSG_PRESET_AVAILABLE)"
+                    echo "$(t MSG_PRESET_AVAILABLE "Available presets:")"
                     echo
                     local idx=1
                     for i in "${!AVAILABLE_PRESETS[@]}"; do
                         echo -e "${COLOR_BLUE}${idx}) ${AVAILABLE_PRESETS[$i]} - ${AVAILABLE_PRESET_DESCRIPTIONS[$i]}${COLOR_RESET}"
                         idx=$((idx + 1))
                     done
-                    echo -e "${COLOR_BLUE}${idx}) $(t MSG_PRESET_CUSTOM_SELECTION)${COLOR_RESET}"
+                    echo -e "${COLOR_BLUE}${idx}) $(t MSG_PRESET_CUSTOM_SELECTION "Custom selection")${COLOR_RESET}"
                     echo
                     local TOTAL_OPTIONS=$idx
-                    printf "${COLOR_GOLD}$(t MSG_ENTER_CHOICE_123) ${COLOR_RESET}"
+                    printf "${COLOR_GOLD}$(t MSG_ENTER_CHOICE_123 "Enter your choice:") ${COLOR_RESET}"
                     tput setaf 3
                     read -r -e -p "" -i "$TOTAL_OPTIONS" PRESET_CHOICE
                     tput sgr0
@@ -1497,7 +1523,7 @@ install_packages() {
             fi
 
             if ! $PRESET_LOADED && [ ${#PACKAGES[@]} -eq 0 ]; then
-                echo "$(t MSG_SELECT_PACKAGES_TEXT)"
+                echo "$(t MSG_SELECT_PACKAGES_TEXT "Select packages to install (space-separated):")"
                 echo
                 echo -e "${COLOR_BLUE}1)  nala${COLOR_RESET}"
                 echo -e "${COLOR_BLUE}2)  eza${COLOR_RESET}"
@@ -1520,7 +1546,7 @@ install_packages() {
                 echo -e "${COLOR_BLUE}19) clang${COLOR_RESET}"
                 echo -e "${COLOR_BLUE}20) cmake${COLOR_RESET}"
                 echo -e "${COLOR_BLUE}21) make${COLOR_RESET}"
-                echo "22) $(t MSG_ALL_INSTALL)"
+                echo "22) $(t MSG_ALL_INSTALL "Install all")"
                 echo
                 printf "${COLOR_GOLD}$(t MSG_ENTER_PACKAGE_NUMBERS_PROMPT) ${COLOR_RESET}"
                 tput setaf 3
@@ -1633,7 +1659,7 @@ EOL
 #------------------------------------------------------------------------------
 install_ai_tools() {
     if $AI_TOOLS_CHOICE; then
-        title_msg "$(t MSG_CONFIG_AI_TOOLS)"
+        title_msg "$(t MSG_CONFIG_AI_TOOLS "❯ Configuration of AI Tools")"
 
         # Define AI tools with their npm package names
         local -A AI_TOOL_PACKAGES=(
@@ -1642,6 +1668,8 @@ install_ai_tools() {
             ["Amp"]="@sourcegraph/amp"
         )
         local AI_TOOL_NAMES=("Claude Code" "Codex" "Amp")
+        local ALL_AI_LABEL
+        ALL_AI_LABEL="$(t MSG_ALL_AI_TOOLS_INSTALL "Install all")"
 
         if $USE_GUM; then
             if $FULL_INSTALL; then
@@ -1652,24 +1680,24 @@ install_ai_tools() {
                     --header.foreground="33" \
                     --cursor.foreground="33" \
                     --height=5 \
-                    --header="$(t MSG_SELECT_AI_TOOLS_GUM)" \
+                    --header="$(t MSG_SELECT_AI_TOOLS_GUM "Select AI tools to install:")" \
                     "Claude Code" "Codex" "Amp" \
-                    "$(t MSG_ALL_AI_TOOLS_INSTALL)")
+                    "$ALL_AI_LABEL")
 
-                if [[ " ${AI_TOOLS[*]} " == *" $(t MSG_ALL_AI_TOOLS_INSTALL) "* ]]; then
+                if [[ " ${AI_TOOLS[*]} " == *" $ALL_AI_LABEL "* ]]; then
                     AI_TOOLS=("${AI_TOOL_NAMES[@]}")
                 fi
             fi
         else
             # Text mode
-            echo "$(t MSG_SELECT_AI_TOOLS_TEXT)"
+            echo "$(t MSG_SELECT_AI_TOOLS_TEXT "Select AI tools to install (space-separated):")"
             echo
             echo -e "${COLOR_BLUE}1) Claude Code${COLOR_RESET}"
             echo -e "${COLOR_BLUE}2) Codex${COLOR_RESET}"
             echo -e "${COLOR_BLUE}3) Amp${COLOR_RESET}"
-            echo "4) $(t MSG_ALL_AI_TOOLS_INSTALL)"
+            echo "4) $ALL_AI_LABEL"
             echo
-            printf "${COLOR_GOLD}$(t MSG_ENTER_AI_TOOLS_NUMBERS_PROMPT) ${COLOR_RESET}"
+            printf "${COLOR_GOLD}$(t MSG_ENTER_AI_TOOLS_NUMBERS_PROMPT "Enter AI tools numbers:") ${COLOR_RESET}"
             tput setaf 3
             read -r -e -p "" AI_TOOL_CHOICES
             tput sgr0
