@@ -52,6 +52,9 @@ AI_TOOLS_CHOICE=false
 # Full installation without interactions
 FULL_INSTALL=false
 
+# Preset name argument
+PRESET_NAME_ARG=""
+
 # Use gum for interactions
 ONLY_GUM=true
 
@@ -152,6 +155,7 @@ show_help() {
     echo "  --xfce | -x       $(t MSG_OPT_XFCE)"
     echo "  --proot | -pr     $(t MSG_OPT_PROOT)"
     echo "  --x11             $(t MSG_OPT_X11)"
+    echo "  --preset | -ps    $(t MSG_OPT_PRESET)"
     echo "  --skip            $(t MSG_OPT_SKIP)"
     echo "  --uninstall       $(t MSG_OPT_UNINSTALL)"
     echo "  --full            $(t MSG_OPT_FULL)"
@@ -212,6 +216,18 @@ while [[ $# -gt 0 ]]; do
             X11_CHOICE=true
             ONLY_GUM=false
             shift
+            ;;
+        --preset|-ps)
+            shift
+            if [ -n "$1" ]; then
+                PRESET_NAME_ARG="$1"
+                PACKAGES_CHOICE=true
+                ONLY_GUM=false
+                shift
+            else
+                echo "$(t MSG_ERROR_PRESET_ARGUMENT)" >&2
+                exit 1
+            fi
             ;;
         --skip)
             EXECUTE_INITIAL_CONFIG=false
@@ -1240,6 +1256,37 @@ update_zshrc() {
 }
 
 #------------------------------------------------------------------------------
+# PRESET HELPERS
+#------------------------------------------------------------------------------
+# Load all available presets into arrays
+load_available_presets() {
+    AVAILABLE_PRESETS=()
+    AVAILABLE_PRESET_FILES=()
+    AVAILABLE_PRESET_DESCRIPTIONS=()
+    for preset_file in "$SCRIPT_DIR"/presets/*.sh; do
+        [ -f "$preset_file" ] || continue
+        local name="" desc=""
+        name=$(grep '^PRESET_NAME=' "$preset_file" | cut -d'"' -f2)
+        desc=$(grep '^PRESET_DESCRIPTION=' "$preset_file" | cut -d'"' -f2)
+        [ -n "$name" ] || continue
+        AVAILABLE_PRESETS+=("$name")
+        AVAILABLE_PRESET_FILES+=("$preset_file")
+        AVAILABLE_PRESET_DESCRIPTIONS+=("$desc")
+    done
+}
+
+# Load a specific preset by file name (without extension)
+load_preset() {
+    local preset_id="$1"
+    local preset_file="$SCRIPT_DIR/presets/${preset_id}.sh"
+    if [ -f "$preset_file" ]; then
+        source "$preset_file"
+        return 0
+    fi
+    return 1
+}
+
+#------------------------------------------------------------------------------
 # INSTALLATION OF ADDITIONAL PACKAGES
 #------------------------------------------------------------------------------
 install_packages() {
@@ -1247,84 +1294,212 @@ install_packages() {
         title_msg "$(t MSG_CONFIG_PACKAGES)"
         local DEFAULT_PACKAGES=("nala" "eza" "bat" "lf" "fzf")
 
+        # All available packages
+        local ALL_PKG_LIST=("nala" "eza" "colorls" "lsd" "bat" "lf" "fzf" "glow" "tmux" "python" \
+                "nodejs" "nodejs-lts" "micro" "vim" "neovim" "lazygit" "open-ssh" "tsu" \
+                "clang" "cmake" "make")
+
+        # Determine preset packages (if any)
+        local PRESET_LOADED=false
+        local -a PRESET_PKG_LIST=()
+
+        if [ -n "$PRESET_NAME_ARG" ]; then
+            # --preset provided via CLI
+            if load_preset "$PRESET_NAME_ARG"; then
+                PRESET_PKG_LIST=("${PRESET_PACKAGES[@]}")
+                PRESET_LOADED=true
+                info_msg "$(t MSG_PRESET_APPLYING) $PRESET_NAME"
+            else
+                echo "$(t MSG_ERROR_PRESET_NOT_FOUND) $PRESET_NAME_ARG" >&2
+                exit 1
+            fi
+        fi
+
         if $USE_GUM; then
             if $FULL_INSTALL; then
-                PACKAGES=("${DEFAULT_PACKAGES[@]}")
+                if $PRESET_LOADED; then
+                    PACKAGES=("${PRESET_PKG_LIST[@]}")
+                else
+                    PACKAGES=("${DEFAULT_PACKAGES[@]}")
+                fi
             else
+                # If no preset loaded via CLI, show preset selection menu
+                if ! $PRESET_LOADED; then
+                    load_available_presets
+                    if [ ${#AVAILABLE_PRESETS[@]} -gt 0 ]; then
+                        local PRESET_OPTIONS=()
+                        for i in "${!AVAILABLE_PRESETS[@]}"; do
+                            PRESET_OPTIONS+=("${AVAILABLE_PRESETS[$i]} - ${AVAILABLE_PRESET_DESCRIPTIONS[$i]}")
+                        done
+                        PRESET_OPTIONS+=("$(t MSG_PRESET_CUSTOM_SELECTION)")
+
+                        local PRESET_SELECTION
+                        PRESET_SELECTION=$(printf '%s\n' "${PRESET_OPTIONS[@]}" | gum choose \
+                            --selected.foreground="33" \
+                            --header.foreground="33" \
+                            --cursor.foreground="33" \
+                            --header="$(t MSG_SELECT_PRESET_OR_MANUAL)")
+
+                        if [ "$PRESET_SELECTION" != "$(t MSG_PRESET_CUSTOM_SELECTION)" ] && [ -n "$PRESET_SELECTION" ]; then
+                            # Extract preset name (before " - ")
+                            local SELECTED_PRESET_NAME="${PRESET_SELECTION%% - *}"
+                            for i in "${!AVAILABLE_PRESETS[@]}"; do
+                                if [ "${AVAILABLE_PRESETS[$i]}" = "$SELECTED_PRESET_NAME" ]; then
+                                    source "${AVAILABLE_PRESET_FILES[$i]}"
+                                    PRESET_PKG_LIST=("${PRESET_PACKAGES[@]}")
+                                    PRESET_LOADED=true
+                                    info_msg "$(t MSG_PRESET_APPLYING) $PRESET_NAME"
+                                    break
+                                fi
+                            done
+                        fi
+                    fi
+                fi
+
+                # Build --selected flags for gum choose
+                local GUM_SELECTED_ARGS=()
+                if $PRESET_LOADED; then
+                    for pkg in "${PRESET_PKG_LIST[@]}"; do
+                        GUM_SELECTED_ARGS+=(--selected="$pkg")
+                    done
+                else
+                    GUM_SELECTED_ARGS=(--selected="nala" --selected="eza" --selected="bat" --selected="lf" --selected="fzf")
+                fi
+
                 # Convert output of gum to array
                 IFS=$'\n' read -r -d '' -a PACKAGES < <(gum choose --no-limit \
                     --selected.foreground="33" \
                     --header.foreground="33" \
                     --cursor.foreground="33" \
-                    --height=18 \
+                    --height=21 \
                     --header="$(t MSG_SELECT_PACKAGES_GUM)" \
-                    --selected="nala" --selected="eza" --selected="bat" --selected="lf" --selected="fzf" \
+                    "${GUM_SELECTED_ARGS[@]}" \
                     "nala" "eza" "colorls" "lsd" "bat" "lf" "fzf" "glow" "tmux" "python" \
                     "nodejs" "nodejs-lts" "micro" "vim" "neovim" "lazygit" "open-ssh" "tsu" \
+                    "clang" "cmake" "make" \
                     "$(t MSG_ALL_INSTALL)")
 
                 if [[ " ${PACKAGES[*]} " == *" $(t MSG_ALL_INSTALL) "* ]]; then
-                    PACKAGES=("nala" "eza" "colorls" "lsd" "bat" "lf" "fzf" "glow" "tmux" "python" \
-                            "nodejs" "nodejs-lts" "micro" "vim" "neovim" "lazygit" "open-ssh" "tsu")
+                    PACKAGES=("${ALL_PKG_LIST[@]}")
                 fi
             fi
         else
-            echo "$(t MSG_SELECT_PACKAGES_TEXT)"
-            echo
-            echo -e "${COLOR_BLUE}1)  nala${COLOR_RESET}"
-            echo -e "${COLOR_BLUE}2)  eza${COLOR_RESET}"
-            echo -e "${COLOR_BLUE}3)  colorls${COLOR_RESET}"
-            echo -e "${COLOR_BLUE}4)  lsd${COLOR_RESET}"
-            echo -e "${COLOR_BLUE}5)  bat${COLOR_RESET}"
-            echo -e "${COLOR_BLUE}6)  lf${COLOR_RESET}"
-            echo -e "${COLOR_BLUE}7)  fzf${COLOR_RESET}"
-            echo -e "${COLOR_BLUE}8)  glow${COLOR_RESET}"
-            echo -e "${COLOR_BLUE}9)  tmux${COLOR_RESET}"
-            echo -e "${COLOR_BLUE}10) python${COLOR_RESET}"
-            echo -e "${COLOR_BLUE}11) nodejs${COLOR_RESET}"
-            echo -e "${COLOR_BLUE}12) nodejs-lts${COLOR_RESET}"
-            echo -e "${COLOR_BLUE}13) micro${COLOR_RESET}"
-            echo -e "${COLOR_BLUE}14) vim${COLOR_RESET}"
-            echo -e "${COLOR_BLUE}15) neovim${COLOR_RESET}"
-            echo -e "${COLOR_BLUE}16) lazygit${COLOR_RESET}"
-            echo -e "${COLOR_BLUE}17) open-ssh${COLOR_RESET}"
-            echo -e "${COLOR_BLUE}18) tsu${COLOR_RESET}"
-            echo "19) $(t MSG_ALL_INSTALL)"
-            echo
-            printf "${COLOR_GOLD}$(t MSG_ENTER_PACKAGE_NUMBERS_PROMPT) ${COLOR_RESET}"
-            tput setaf 3
-            read -r -e -p "" -i "1 2 5 6 7" PACKAGE_CHOICES
-            tput sgr0
-            tput cuu 23
-            tput ed
+            # Text mode - show preset selection first
+            if ! $PRESET_LOADED; then
+                load_available_presets
+                if [ ${#AVAILABLE_PRESETS[@]} -gt 0 ]; then
+                    echo "$(t MSG_PRESET_AVAILABLE)"
+                    echo
+                    local idx=1
+                    for i in "${!AVAILABLE_PRESETS[@]}"; do
+                        echo -e "${COLOR_BLUE}${idx}) ${AVAILABLE_PRESETS[$i]} - ${AVAILABLE_PRESET_DESCRIPTIONS[$i]}${COLOR_RESET}"
+                        idx=$((idx + 1))
+                    done
+                    echo -e "${COLOR_BLUE}${idx}) $(t MSG_PRESET_CUSTOM_SELECTION)${COLOR_RESET}"
+                    echo
+                    local TOTAL_OPTIONS=$idx
+                    printf "${COLOR_GOLD}$(t MSG_ENTER_CHOICE_123) ${COLOR_RESET}"
+                    tput setaf 3
+                    read -r -e -p "" -i "$TOTAL_OPTIONS" PRESET_CHOICE
+                    tput sgr0
+                    # Clear the preset menu
+                    tput cuu $((TOTAL_OPTIONS + 3))
+                    tput ed
 
-            if [[ "$PACKAGE_CHOICES" == *"19"* ]]; then
-                PACKAGES=("nala" "eza" "colorls" "lsd" "bat" "lf" "fzf" "glow" "tmux" "python" \
-                        "nodejs" "nodejs-lts" "micro" "vim" "neovim" "lazygit" "open-ssh" "tsu")
-            else
-                PACKAGES=()
-                for CHOICE in $PACKAGE_CHOICES; do
-                    case $CHOICE in
-                        1) PACKAGES+=("nala") ;;
-                        2) PACKAGES+=("eza") ;;
-                        3) PACKAGES+=("colorls") ;;
-                        4) PACKAGES+=("lsd") ;;
-                        5) PACKAGES+=("bat") ;;
-                        6) PACKAGES+=("lf") ;;
-                        7) PACKAGES+=("fzf") ;;
-                        8) PACKAGES+=("glow") ;;
-                        9) PACKAGES+=("tmux") ;;
-                        10) PACKAGES+=("python") ;;
-                        11) PACKAGES+=("nodejs") ;;
-                        12) PACKAGES+=("nodejs-lts") ;;
-                        13) PACKAGES+=("micro") ;;
-                        14) PACKAGES+=("vim") ;;
-                        15) PACKAGES+=("neovim") ;;
-                        16) PACKAGES+=("lazygit") ;;
-                        17) PACKAGES+=("open-ssh") ;;
-                        18) PACKAGES+=("tsu") ;;
-                    esac
-                done
+                    if [ "$PRESET_CHOICE" -ge 1 ] 2>/dev/null && [ "$PRESET_CHOICE" -lt "$TOTAL_OPTIONS" ] 2>/dev/null; then
+                        local CHOSEN_IDX=$((PRESET_CHOICE - 1))
+                        source "${AVAILABLE_PRESET_FILES[$CHOSEN_IDX]}"
+                        PRESET_PKG_LIST=("${PRESET_PACKAGES[@]}")
+                        PRESET_LOADED=true
+                        info_msg "$(t MSG_PRESET_APPLYING) $PRESET_NAME"
+                    fi
+                fi
+            fi
+
+            if $PRESET_LOADED; then
+                # Show preset packages and ask for confirmation or editing
+                echo -e "${COLOR_BLUE}Packages: ${PRESET_PKG_LIST[*]}${COLOR_RESET}"
+                echo
+                printf "${COLOR_GOLD}Confirm selection? (Y/n/edit): ${COLOR_RESET}"
+                tput setaf 3
+                read -r -e -p "" -i "Y" CONFIRM_CHOICE
+                tput sgr0
+                tput cuu 3
+                tput ed
+
+                if [[ "$CONFIRM_CHOICE" =~ ^[yYoO]$ ]]; then
+                    PACKAGES=("${PRESET_PKG_LIST[@]}")
+                elif [[ "$CONFIRM_CHOICE" == "edit" ]]; then
+                    # Fall through to manual selection with preset defaults
+                    PRESET_LOADED=false
+                else
+                    PACKAGES=()
+                fi
+            fi
+
+            if ! $PRESET_LOADED && [ ${#PACKAGES[@]} -eq 0 ]; then
+                echo "$(t MSG_SELECT_PACKAGES_TEXT)"
+                echo
+                echo -e "${COLOR_BLUE}1)  nala${COLOR_RESET}"
+                echo -e "${COLOR_BLUE}2)  eza${COLOR_RESET}"
+                echo -e "${COLOR_BLUE}3)  colorls${COLOR_RESET}"
+                echo -e "${COLOR_BLUE}4)  lsd${COLOR_RESET}"
+                echo -e "${COLOR_BLUE}5)  bat${COLOR_RESET}"
+                echo -e "${COLOR_BLUE}6)  lf${COLOR_RESET}"
+                echo -e "${COLOR_BLUE}7)  fzf${COLOR_RESET}"
+                echo -e "${COLOR_BLUE}8)  glow${COLOR_RESET}"
+                echo -e "${COLOR_BLUE}9)  tmux${COLOR_RESET}"
+                echo -e "${COLOR_BLUE}10) python${COLOR_RESET}"
+                echo -e "${COLOR_BLUE}11) nodejs${COLOR_RESET}"
+                echo -e "${COLOR_BLUE}12) nodejs-lts${COLOR_RESET}"
+                echo -e "${COLOR_BLUE}13) micro${COLOR_RESET}"
+                echo -e "${COLOR_BLUE}14) vim${COLOR_RESET}"
+                echo -e "${COLOR_BLUE}15) neovim${COLOR_RESET}"
+                echo -e "${COLOR_BLUE}16) lazygit${COLOR_RESET}"
+                echo -e "${COLOR_BLUE}17) open-ssh${COLOR_RESET}"
+                echo -e "${COLOR_BLUE}18) tsu${COLOR_RESET}"
+                echo -e "${COLOR_BLUE}19) clang${COLOR_RESET}"
+                echo -e "${COLOR_BLUE}20) cmake${COLOR_RESET}"
+                echo -e "${COLOR_BLUE}21) make${COLOR_RESET}"
+                echo "22) $(t MSG_ALL_INSTALL)"
+                echo
+                printf "${COLOR_GOLD}$(t MSG_ENTER_PACKAGE_NUMBERS_PROMPT) ${COLOR_RESET}"
+                tput setaf 3
+                read -r -e -p "" -i "1 2 5 6 7" PACKAGE_CHOICES
+                tput sgr0
+                tput cuu 26
+                tput ed
+
+                if [[ "$PACKAGE_CHOICES" == *"22"* ]]; then
+                    PACKAGES=("${ALL_PKG_LIST[@]}")
+                else
+                    PACKAGES=()
+                    for CHOICE in $PACKAGE_CHOICES; do
+                        case $CHOICE in
+                            1) PACKAGES+=("nala") ;;
+                            2) PACKAGES+=("eza") ;;
+                            3) PACKAGES+=("colorls") ;;
+                            4) PACKAGES+=("lsd") ;;
+                            5) PACKAGES+=("bat") ;;
+                            6) PACKAGES+=("lf") ;;
+                            7) PACKAGES+=("fzf") ;;
+                            8) PACKAGES+=("glow") ;;
+                            9) PACKAGES+=("tmux") ;;
+                            10) PACKAGES+=("python") ;;
+                            11) PACKAGES+=("nodejs") ;;
+                            12) PACKAGES+=("nodejs-lts") ;;
+                            13) PACKAGES+=("micro") ;;
+                            14) PACKAGES+=("vim") ;;
+                            15) PACKAGES+=("neovim") ;;
+                            16) PACKAGES+=("lazygit") ;;
+                            17) PACKAGES+=("open-ssh") ;;
+                            18) PACKAGES+=("tsu") ;;
+                            19) PACKAGES+=("clang") ;;
+                            20) PACKAGES+=("cmake") ;;
+                            21) PACKAGES+=("make") ;;
+                        esac
+                    done
+                fi
             fi
         fi
 
@@ -2021,6 +2196,11 @@ fi
 # Copy plugins to config directory
 if [ -d "$SCRIPT_DIR/plugins" ]; then
     cp -rf "$SCRIPT_DIR/plugins" "$OHMYTERMUX_CONFIG_DIR/" >/dev/null 2>&1
+fi
+
+# Copy presets to config directory
+if [ -d "$SCRIPT_DIR/presets" ]; then
+    cp -rf "$SCRIPT_DIR/presets" "$OHMYTERMUX_CONFIG_DIR/" >/dev/null 2>&1
 fi
 
 type run_hook &>/dev/null && run_hook "post_cleanup"

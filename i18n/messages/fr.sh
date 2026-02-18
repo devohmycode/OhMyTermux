@@ -31,6 +31,7 @@ MSG_OPT_SKIP="Ignorer la configuration initiale"
 MSG_OPT_UNINSTALL="Désinstallation de Debian Proot"
 MSG_OPT_FULL="Installer tous les modules sans confirmation"
 MSG_OPT_HELP="Afficher ce message d'aide"
+MSG_OPT_PRESET="Utiliser un preset d'installation prédéfini"
 
 # Exemples d'utilisation
 MSG_EXAMPLE_GUM="\$0 --gum                     # Installation interactive avec gum"
@@ -539,3 +540,11 @@ MSG_PLUGIN_ENABLED="Plugin active:"
 MSG_PLUGIN_NO_SELECTION="Aucun plugin selectionne."
 MSG_PLUGIN_SYSTEM_INIT="Initialisation du systeme de plugins"
 MSG_PLUGIN_EXECUTION="Execution des plugins"
+
+# Messages des presets
+MSG_ERROR_PRESET_ARGUMENT="Erreur : --preset nécessite un nom de preset (ex: --preset python-dev)"
+MSG_ERROR_PRESET_NOT_FOUND="Erreur : Preset introuvable :"
+MSG_SELECT_PRESET_OR_MANUAL="Sélectionnez un preset d'installation ou choisissez la sélection manuelle :"
+MSG_PRESET_CUSTOM_SELECTION="Sélection manuelle"
+MSG_PRESET_APPLYING="Application du preset :"
+MSG_PRESET_AVAILABLE="Presets disponibles :"
