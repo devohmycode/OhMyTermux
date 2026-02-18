@@ -1418,9 +1418,9 @@ install_packages() {
 
             if $PRESET_LOADED; then
                 # Show preset packages and ask for confirmation or editing
-                echo -e "${COLOR_BLUE}Packages: ${PRESET_PKG_LIST[*]}${COLOR_RESET}"
+                echo -e "${COLOR_BLUE}$(t MSG_PRESET_PACKAGES) ${PRESET_PKG_LIST[*]}${COLOR_RESET}"
                 echo
-                printf "${COLOR_GOLD}Confirm selection? (Y/n/edit): ${COLOR_RESET}"
+                printf "${COLOR_GOLD}$(t MSG_PRESET_CONFIRM_SELECTION) ${COLOR_RESET}"
                 tput setaf 3
                 read -r -e -p "" -i "Y" CONFIRM_CHOICE
                 tput sgr0

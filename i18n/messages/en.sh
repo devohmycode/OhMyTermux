@@ -548,3 +548,5 @@ MSG_SELECT_PRESET_OR_MANUAL="Select an installation preset or choose manual sele
 MSG_PRESET_CUSTOM_SELECTION="Custom selection"
 MSG_PRESET_APPLYING="Applying preset:"
 MSG_PRESET_AVAILABLE="Available presets:"
+MSG_PRESET_PACKAGES="Packages:"
+MSG_PRESET_CONFIRM_SELECTION="Confirm selection? (Y/n/edit):"
