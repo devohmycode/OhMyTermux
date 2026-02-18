@@ -1263,24 +1263,70 @@ update_zshrc() {
 #------------------------------------------------------------------------------
 # PRESET HELPERS
 #------------------------------------------------------------------------------
+
+# Built-in preset definitions
+declare -A BUILTIN_PRESET_DESCRIPTIONS=(
+    ["Minimal"]="Essential tools only"
+    ["Python Development"]="Python development environment"
+    ["Web Development"]="Web/Node.js development environment"
+    ["C/C++ Development"]="C/C++ development environment"
+    ["Android Development"]="Android development environment"
+    ["SysAdmin"]="System administration tools"
+)
+declare -A BUILTIN_PRESET_PACKAGES=(
+    ["Minimal"]="nala eza bat fzf"
+    ["Python Development"]="python neovim fzf bat eza nala glow lazygit"
+    ["Web Development"]="nodejs nodejs-lts python neovim fzf bat eza nala lazygit glow"
+    ["C/C++ Development"]="clang cmake make neovim fzf bat eza nala lazygit"
+    ["Android Development"]="python nodejs-lts neovim git fzf bat eza nala open-ssh"
+    ["SysAdmin"]="nala tmux open-ssh tsu fzf bat eza vim lazygit"
+)
+BUILTIN_PRESET_ORDER=("Minimal" "Python Development" "Web Development" "C/C++ Development" "Android Development" "SysAdmin")
+
 # Load all available presets into arrays
 load_available_presets() {
     AVAILABLE_PRESETS=()
-    AVAILABLE_PRESET_FILES=()
     AVAILABLE_PRESET_DESCRIPTIONS=()
+    AVAILABLE_PRESET_PACKAGES_MAP=()
+
+    # Load from external files if available
+    local found_files=false
     for preset_file in "$SCRIPT_DIR"/presets/*.sh; do
         [ -f "$preset_file" ] || continue
-        local name="" desc=""
-        name=$(grep '^PRESET_NAME=' "$preset_file" | cut -d'"' -f2)
-        desc=$(grep '^PRESET_DESCRIPTION=' "$preset_file" | cut -d'"' -f2)
-        [ -n "$name" ] || continue
-        AVAILABLE_PRESETS+=("$name")
-        AVAILABLE_PRESET_FILES+=("$preset_file")
-        AVAILABLE_PRESET_DESCRIPTIONS+=("$desc")
+        found_files=true
+        source "$preset_file"
+        [ -n "$PRESET_NAME" ] || continue
+        AVAILABLE_PRESETS+=("$PRESET_NAME")
+        AVAILABLE_PRESET_DESCRIPTIONS+=("$PRESET_DESCRIPTION")
+        AVAILABLE_PRESET_PACKAGES_MAP+=("${PRESET_PACKAGES[*]}")
     done
+
+    # Fallback to built-in presets if no files found
+    if ! $found_files; then
+        for preset_name in "${BUILTIN_PRESET_ORDER[@]}"; do
+            AVAILABLE_PRESETS+=("$preset_name")
+            AVAILABLE_PRESET_DESCRIPTIONS+=("${BUILTIN_PRESET_DESCRIPTIONS[$preset_name]}")
+            AVAILABLE_PRESET_PACKAGES_MAP+=("${BUILTIN_PRESET_PACKAGES[$preset_name]}")
+        done
+    fi
 }
 
-# Load a specific preset by file name (without extension)
+# Load a specific preset by name and set PRESET_PACKAGES
+load_preset_packages() {
+    local preset_name="$1"
+    local idx
+    for idx in "${!AVAILABLE_PRESETS[@]}"; do
+        if [ "${AVAILABLE_PRESETS[$idx]}" = "$preset_name" ]; then
+            IFS=' ' read -r -a PRESET_PACKAGES <<< "${AVAILABLE_PRESET_PACKAGES_MAP[$idx]}"
+            PRESET_NAME="$preset_name"
+            PRESET_DESCRIPTION="${AVAILABLE_PRESET_DESCRIPTIONS[$idx]}"
+            return 0
+        fi
+    done
+    return 1
+}
+
+# Load a specific preset by file name (without extension) - CLI usage
 load_preset() {
     local preset_id="$1"
     local preset_file="$SCRIPT_DIR/presets/${preset_id}.sh"
@@ -1288,6 +1334,17 @@ load_preset() {
         source "$preset_file"
         return 0
     fi
+    # Fallback: try built-in presets by matching id
+    for preset_name in "${BUILTIN_PRESET_ORDER[@]}"; do
+        local normalized="${preset_name,,}"
+        normalized="${normalized// /-}"
+        if [ "$normalized" = "$preset_id" ]; then
+            IFS=' ' read -r -a PRESET_PACKAGES <<< "${BUILTIN_PRESET_PACKAGES[$preset_name]}"
+            PRESET_NAME="$preset_name"
+            PRESET_DESCRIPTION="${BUILTIN_PRESET_DESCRIPTIONS[$preset_name]}"
+            return 0
+        fi
+    done
     return 1
 }
 
@@ -1348,15 +1405,11 @@ install_packages() {
                         if [ "$PRESET_SELECTION" != "$(t MSG_PRESET_CUSTOM_SELECTION)" ] && [ -n "$PRESET_SELECTION" ]; then
                             # Extract preset name (before " - ")
                             local SELECTED_PRESET_NAME="${PRESET_SELECTION%% - *}"
-                            for i in "${!AVAILABLE_PRESETS[@]}"; do
-                                if [ "${AVAILABLE_PRESETS[$i]}" = "$SELECTED_PRESET_NAME" ]; then
-                                    source "${AVAILABLE_PRESET_FILES[$i]}"
-                                    PRESET_PKG_LIST=("${PRESET_PACKAGES[@]}")
-                                    PRESET_LOADED=true
-                                    info_msg "$(t MSG_PRESET_APPLYING) $PRESET_NAME"
-                                    break
-                                fi
-                            done
+                            if load_preset_packages "$SELECTED_PRESET_NAME"; then
+                                PRESET_PKG_LIST=("${PRESET_PACKAGES[@]}")
+                                PRESET_LOADED=true
+                                info_msg "$(t MSG_PRESET_APPLYING) $PRESET_NAME"
+                            fi
                         fi
                     fi
                 fi
@@ -1413,10 +1466,11 @@ install_packages() {
 
                     if [ "$PRESET_CHOICE" -ge 1 ] 2>/dev/null && [ "$PRESET_CHOICE" -lt "$TOTAL_OPTIONS" ] 2>/dev/null; then
                         local CHOSEN_IDX=$((PRESET_CHOICE - 1))
-                        source "${AVAILABLE_PRESET_FILES[$CHOSEN_IDX]}"
-                        PRESET_PKG_LIST=("${PRESET_PACKAGES[@]}")
-                        PRESET_LOADED=true
-                        info_msg "$(t MSG_PRESET_APPLYING) $PRESET_NAME"
+                        if load_preset_packages "${AVAILABLE_PRESETS[$CHOSEN_IDX]}"; then
+                            PRESET_PKG_LIST=("${PRESET_PACKAGES[@]}")
+                            PRESET_LOADED=true
+                            info_msg "$(t MSG_PRESET_APPLYING) $PRESET_NAME"
+                        fi
                     fi
                 fi
             fi
