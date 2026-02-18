@@ -97,3 +97,20 @@ download_lib_system() {
     mkdir -p "$SCRIPT_DIR/lib"
     _download_files "$SCRIPT_DIR" "${LIB_FILES[@]}"
 }
+
+#------------------------------------------------------------------------------
+# Download the presets if needed
+#------------------------------------------------------------------------------
+download_presets() {
+    local PRESET_FILES=(
+        "presets/minimal.sh"
+        "presets/python-dev.sh"
+        "presets/web-dev.sh"
+        "presets/cpp-dev.sh"
+        "presets/android-dev.sh"
+        "presets/sysadmin.sh"
+    )
+
+    mkdir -p "$SCRIPT_DIR/presets"
+    _download_files "$SCRIPT_DIR" "${PRESET_FILES[@]}"
+}

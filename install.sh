@@ -81,6 +81,11 @@ source "$SCRIPT_DIR/lib/i18n_loader.sh"
 ERROR_MSG_KEY="MSG_ERROR_INSTALL"
 ERROR_REFER_KEY="MSG_ERROR_REFER_MESSAGES"
 
+# Download presets if not available locally
+if [ ! -d "$SCRIPT_DIR/presets" ] || [ -z "$(ls "$SCRIPT_DIR/presets/"*.sh 2>/dev/null)" ]; then
+    type download_presets &>/dev/null && download_presets
+fi
+
 # Initialize plugin system (discover manifests, resolve order)
 type init_plugin_system &>/dev/null && init_plugin_system
 
