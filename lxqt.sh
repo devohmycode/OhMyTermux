@@ -373,6 +373,9 @@ SELECTED_ICON_THEME="Papirus"
 SELECTED_WALLPAPER=""
 DESKTOP_ENV=lxqt
 THEMECONF
+
+    # Save desktop session for start/stop scripts
+    echo "DESKTOP_SESSION=lxqt" > "$OHMYTERMUX_CONFIG_DIR/desktop.conf"
 }
 
 #------------------------------------------------------------------------------
@@ -435,7 +438,193 @@ main() {
     title_msg "$(t MSG_LXQT_ELEMENTS_INSTALLATION)"
     configure_lxqt "$LXQT_VERSION" "$BROWSER_CHOICE"
 
+    # Update the start script for LXQt
+    title_msg "$(t MSG_LXQT_INSTALL_LXQT) - start"
+    _update_start_script
+
     success_msg "$(t MSG_LXQT_INSTALL_LXQT) ✓"
+}
+
+#------------------------------------------------------------------------------
+# UPDATE START / STOP SCRIPTS FOR LXQT
+#------------------------------------------------------------------------------
+_update_start_script() {
+    info_msg "$(t MSG_LXQT_BASE_CONFIG) - start/stop"
+
+    # Write the start script
+    cat > "$PREFIX/bin/start" << 'STARTEOF'
+#!/bin/bash
+
+# ---------------------------------------------------------------------------
+# OhMyTermux - start
+# Démarre Termux-X11 avec XFCE ou LXQt selon l'environnement installé
+# ---------------------------------------------------------------------------
+
+OHMYTERMUX_CONFIG="$HOME/.config/OhMyTermux"
+
+# ---------------------------------------------------------------------------
+# NETTOYAGE DU SERVEUR X EXISTANT
+# ---------------------------------------------------------------------------
+pkill -f "termux.x11"   > /dev/null 2>&1
+pkill -f "Xwayland"     > /dev/null 2>&1
+pkill -f "xfce4-session"> /dev/null 2>&1
+pkill -f "lxqt-session" > /dev/null 2>&1
+pkill -f "startlxqt"    > /dev/null 2>&1
+pkill -f "openbox"      > /dev/null 2>&1
+sleep 1
+
+# Supprimer les verrous X11 résiduels
+rm -f /tmp/.X1-lock          > /dev/null 2>&1
+rm -f /tmp/.X11-unix/X1      > /dev/null 2>&1
+
+# ---------------------------------------------------------------------------
+# DÉTECTER L'ENVIRONNEMENT DE BUREAU
+# ---------------------------------------------------------------------------
+DESKTOP_SESSION="unknown"
+
+# 1. Lire depuis desktop.conf (priorité haute - écrit par install.sh / lxqt.sh)
+if [ -f "$OHMYTERMUX_CONFIG/desktop.conf" ]; then
+    source "$OHMYTERMUX_CONFIG/desktop.conf"
+fi
+
+# 2. Fallback : lire depuis theme_config.tmp (écrit par lxqt.sh)
+if [ "$DESKTOP_SESSION" = "unknown" ] || [ -z "$DESKTOP_SESSION" ]; then
+    if [ -f "$OHMYTERMUX_CONFIG/theme_config.tmp" ]; then
+        DETECTED=$(grep '^DESKTOP_ENV=' "$OHMYTERMUX_CONFIG/theme_config.tmp" | cut -d'=' -f2 | tr -d '"')
+        [ -n "$DETECTED" ] && DESKTOP_SESSION="$DETECTED"
+    fi
+fi
+
+# 3. Fallback final : détecter par la présence des binaires
+if [ "$DESKTOP_SESSION" = "unknown" ] || [ -z "$DESKTOP_SESSION" ]; then
+    if command -v startlxqt > /dev/null 2>&1 || command -v lxqt-session > /dev/null 2>&1; then
+        DESKTOP_SESSION="lxqt"
+    elif command -v xfce4-session > /dev/null 2>&1; then
+        DESKTOP_SESSION="xfce"
+    else
+        echo "[start] Aucun environnement de bureau détecté (xfce4-session ou startlxqt)."
+        exit 1
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# PULSEAUDIO
+# ---------------------------------------------------------------------------
+pulseaudio --start \
+    --load="module-native-protocol-tcp auth-ip-acl=127.0.0.1 auth-anonymous=1" \
+    --exit-idle-time=-1 > /dev/null 2>&1
+
+export PULSE_SERVER=127.0.0.1
+
+# ---------------------------------------------------------------------------
+# DÉMARRER TERMUX-X11
+# ---------------------------------------------------------------------------
+XDG_RUNTIME_DIR=${TMPDIR} termux-x11 :1.0 &> /dev/null &
+sleep 1
+
+am start --user 0 -n com.termux.x11/com.termux.x11.MainActivity > /dev/null 2>&1
+sleep 1
+
+# ---------------------------------------------------------------------------
+# VIRGL (rendu GPU)
+# ---------------------------------------------------------------------------
+GPU_VENDOR="unknown"
+if [ -f "$OHMYTERMUX_CONFIG/gpu_vendor" ]; then
+    GPU_VENDOR=$(cat "$OHMYTERMUX_CONFIG/gpu_vendor")
+fi
+
+if [ "$GPU_VENDOR" = "adreno" ]; then
+    MESA_NO_ERROR=1 MESA_GL_VERSION_OVERRIDE=4.3COMPAT MESA_GLES_VERSION_OVERRIDE=3.2 \
+        virgl_test_server_android --angle-gl &> /dev/null &
+else
+    MESA_NO_ERROR=1 MESA_GL_VERSION_OVERRIDE=4.3COMPAT MESA_GLES_VERSION_OVERRIDE=3.2 \
+        virgl_test_server_android &> /dev/null &
+fi
+sleep 1
+
+# ---------------------------------------------------------------------------
+# DÉMARRER LA SESSION DE BUREAU
+# ---------------------------------------------------------------------------
+export DISPLAY=:1.0
+export GALLIUM_DRIVER=virpipe
+
+case "$DESKTOP_SESSION" in
+    lxqt)
+        env DISPLAY=:1.0 GALLIUM_DRIVER=virpipe \
+            dbus-launch --exit-with-session startlxqt &> /dev/null &
+        sleep 5
+        process_id=$(ps -aux | grep '[x]screensaver' | awk '{print $2}')
+        [ -n "$process_id" ] && kill "$process_id" > /dev/null 2>&1
+        ;;
+    xfce)
+        env DISPLAY=:1.0 GALLIUM_DRIVER=virpipe \
+            dbus-launch --exit-with-session xfce4-session &> /dev/null &
+        sleep 5
+        process_id=$(ps -aux | grep '[x]fce4-screensaver' | awk '{print $2}')
+        [ -n "$process_id" ] && kill "$process_id" > /dev/null 2>&1
+        ;;
+    *)
+        echo "[start] Environnement de bureau non reconnu : $DESKTOP_SESSION"
+        echo "        Valeurs acceptées : xfce, lxqt"
+        exit 1
+        ;;
+esac
+STARTEOF
+
+    chmod +x "$PREFIX/bin/start"
+
+    # Update the stop script to handle both XFCE and LXQt
+    cat > "$PREFIX/bin/kill_termux_x11" << STOPEOF
+#!/bin/bash
+
+OHMYTERMUX_CONFIG="\$HOME/.config/OhMyTermux"
+DESKTOP_SESSION="lxqt"
+[ -f "\$OHMYTERMUX_CONFIG/desktop.conf" ] && source "\$OHMYTERMUX_CONFIG/desktop.conf"
+
+if pgrep -f 'apt|apt-get|dpkg|nala' > /dev/null; then
+    zenity --info --text="A software is being installed. Please wait before stopping the session."
+    exit 1
+fi
+
+termux_x11_pid=\$(pgrep -f /system/bin/app_process.*com.termux.x11.Loader)
+virgl_pid=\$(pgrep -f "virgl_test_server")
+
+case "\$DESKTOP_SESSION" in
+    lxqt)
+        de_pid=\$(pgrep -f "lxqt-session")
+        ob_pid=\$(pgrep -f "openbox")
+        de_name="LXQt"
+        ;;
+    *)
+        de_pid=\$(pgrep -f "xfce4-session")
+        ob_pid=""
+        de_name="XFCE"
+        ;;
+esac
+
+[ -n "\$termux_x11_pid" ] && kill -9 "\$termux_x11_pid" 2>/dev/null
+[ -n "\$de_pid"          ] && kill -9 "\$de_pid"         2>/dev/null
+[ -n "\$ob_pid"          ] && kill -9 "\$ob_pid"         2>/dev/null
+[ -n "\$virgl_pid"       ] && kill -9 "\$virgl_pid"      2>/dev/null
+
+rm -f /tmp/.X1-lock       2>/dev/null
+rm -f /tmp/.X11-unix/X1   2>/dev/null
+
+if [ -n "\$termux_x11_pid" ] || [ -n "\$de_pid" ]; then
+    zenity --info --text="Termux-X11 and \$de_name sessions closed."
+else
+    zenity --info --text="Termux-X11 or \$de_name session not found."
+fi
+
+info_output=\$(termux-info)
+if pid=\$(echo "\$info_output" | grep -o 'TERMUX_APP_PID=[0-9]\+' | awk -F= '{print \$2}') && [ -n "\$pid" ]; then
+    kill "\$pid" 2>/dev/null
+fi
+
+exit 0
+STOPEOF
+
+    chmod +x "$PREFIX/bin/kill_termux_x11"
 }
 
 # Run main
