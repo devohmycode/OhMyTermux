@@ -37,8 +37,9 @@ PACKAGES_CHOICE=false
 # Custom fonts installation
 FONT_CHOICE=false
 
-# XFCE environment installation
-XFCE_CHOICE=false
+# Desktop environment installation
+DESKTOP_CHOICE=false
+DESKTOP_ENV=""
 
 # Debian Proot installation
 PROOT_CHOICE=false
@@ -158,6 +159,7 @@ show_help() {
     echo "  --ai | -ai        $(t MSG_OPT_AI)"
     echo "  --font | -f       $(t MSG_OPT_FONT)"
     echo "  --xfce | -x       $(t MSG_OPT_XFCE)"
+    echo "  --desktop | -de   $(t MSG_OPT_DESKTOP)"
     echo "  --proot | -pr     $(t MSG_OPT_PROOT)"
     echo "  --x11             $(t MSG_OPT_X11)"
     echo "  --preset | -ps    $(t MSG_OPT_PRESET)"
@@ -208,9 +210,19 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         --xfce|-x)
-            XFCE_CHOICE=true
+            DESKTOP_CHOICE=true
+            DESKTOP_ENV="xfce"
             ONLY_GUM=false
             shift
+            ;;
+        --desktop|-de)
+            DESKTOP_CHOICE=true
+            ONLY_GUM=false
+            shift
+            if [ -n "$1" ] && [[ "$1" =~ ^(xfce|lxqt)$ ]]; then
+                DESKTOP_ENV="$1"
+                shift
+            fi
             ;;
         --proot|-pr)
             PROOT_CHOICE=true
@@ -263,7 +275,8 @@ while [[ $# -gt 0 ]]; do
             PACKAGES_CHOICE=true
             AI_TOOLS_CHOICE=true
             FONT_CHOICE=true
-            XFCE_CHOICE=true
+            DESKTOP_CHOICE=true
+            DESKTOP_ENV="xfce"
             PROOT_CHOICE=true
             X11_CHOICE=true
             SCRIPT_CHOICE=true
@@ -333,7 +346,7 @@ if $ONLY_GUM; then
     PACKAGES_CHOICE=true
     AI_TOOLS_CHOICE=true
     FONT_CHOICE=true
-    XFCE_CHOICE=true
+    DESKTOP_CHOICE=true
     PROOT_CHOICE=true
     X11_CHOICE=true
     SCRIPT_CHOICE=true
@@ -2188,7 +2201,7 @@ fi
 # Checking if specific arguments have been provided
 type run_hook &>/dev/null && run_hook "pre_install"
 
-if [ "$SHELL_CHOICE" = true ] || [ "$PACKAGES_CHOICE" = true ] || [ "$AI_TOOLS_CHOICE" = true ] || [ "$FONT_CHOICE" = true ] || [ "$XFCE_CHOICE" = true ] || [ "$PROOT_CHOICE" = true ] || [ "$X11_CHOICE" = true ]; then
+if [ "$SHELL_CHOICE" = true ] || [ "$PACKAGES_CHOICE" = true ] || [ "$AI_TOOLS_CHOICE" = true ] || [ "$FONT_CHOICE" = true ] || [ "$DESKTOP_CHOICE" = true ] || [ "$PROOT_CHOICE" = true ] || [ "$X11_CHOICE" = true ]; then
     if $EXECUTE_INITIAL_CONFIG; then
         type run_hook &>/dev/null && run_hook "pre_initial_config"
         initial_config
@@ -2212,13 +2225,13 @@ if [ "$SHELL_CHOICE" = true ] || [ "$PACKAGES_CHOICE" = true ] || [ "$AI_TOOLS_C
         install_font
         type run_hook &>/dev/null && run_hook "post_font"
     fi
-    if [ "$XFCE_CHOICE" = true ]; then
+    if [ "$DESKTOP_CHOICE" = true ]; then
         type run_hook &>/dev/null && run_hook "pre_xfce"
-        install_xfce
+        install_desktop
         type run_hook &>/dev/null && run_hook "post_xfce"
     fi
-    if [ "$XFCE_CHOICE" = true ] && [ "$PROOT_CHOICE" = false ]; then
-        install_xfce_scripts
+    if [ "$DESKTOP_CHOICE" = true ] && [ "$PROOT_CHOICE" = false ]; then
+        install_desktop_scripts
     fi
     if [ "$PROOT_CHOICE" = true ]; then
         type run_hook &>/dev/null && run_hook "pre_proot"
@@ -2249,7 +2262,7 @@ else
     install_font
     type run_hook &>/dev/null && run_hook "post_font"
     type run_hook &>/dev/null && run_hook "pre_xfce"
-    install_xfce
+    install_desktop
     type run_hook &>/dev/null && run_hook "post_xfce"
     type run_hook &>/dev/null && run_hook "pre_proot"
     install_proot
@@ -2269,8 +2282,8 @@ type run_hook &>/dev/null && run_hook "pre_cleanup"
 
 title_msg "❯ Saving the installation scripts"
 mkdir -p $OHMYTERMUX_CONFIG_DIR >/dev/null 2>&1
-mv -f xfce.sh proot.sh utils.sh install.sh $OHMYTERMUX_CONFIG_DIR/ >/dev/null 2>&1
-rm -f xfce.sh proot.sh utils.sh install.sh >/dev/null 2>&1
+mv -f xfce.sh lxqt.sh proot.sh utils.sh install.sh $OHMYTERMUX_CONFIG_DIR/ >/dev/null 2>&1
+rm -f xfce.sh lxqt.sh proot.sh utils.sh install.sh >/dev/null 2>&1
 
 # Clean up downloaded i18n and lib files if they were downloaded during installation
 if [ -d "$SCRIPT_DIR/i18n" ] && [ "$MESSAGES_LOADED" != "fallback" ]; then
