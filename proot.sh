@@ -304,6 +304,11 @@ configure_themes_and_icons() {
         mkdir -p \"$PROOT_DEBIAN_ROOT/home/$USERNAME/.themes/\"
     " "$(t "MSG_PROOT_CREATING_DIRECTORIES")"
 
+    # Skip GTK themes for LXQt (uses Qt/Kvantum themes instead)
+    if [ "${DESKTOP_ENV}" = "lxqt" ]; then
+        INSTALL_THEME=false
+    fi
+
     # Copy themes if installed
     if [ "$INSTALL_THEME" = true ] && [ -n "$SELECTED_THEME" ]; then
         copy_theme "$SELECTED_THEME"
