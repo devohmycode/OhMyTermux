@@ -2013,19 +2013,37 @@ _install_lxqt() {
 }
 
 #------------------------------------------------------------------------------
-# INSTALLATION OF THE XFCE SCRIPTS
+# INSTALLATION OF THE DESKTOP SCRIPTS
 #------------------------------------------------------------------------------
-install_xfce_scripts() {
-    title_msg "$(t MSG_CONFIG_XFCE_SCRIPTS)"
+install_desktop_scripts() {
+    local de_name="XFCE"
+    local msg_config_key="MSG_CONFIG_XFCE_SCRIPTS"
+
+    # Read desktop config
+    if [ -f "$OHMYTERMUX_CONFIG_DIR/desktop.conf" ]; then
+        source "$OHMYTERMUX_CONFIG_DIR/desktop.conf"
+    fi
+
+    case "${DESKTOP_SESSION:-xfce}" in
+        lxqt)
+            de_name="LXQt"
+            msg_config_key="MSG_CONFIG_LXQT_SCRIPTS"
+            ;;
+    esac
+
+    title_msg "$(t "$msg_config_key")"
 
     # Installation of the start script
-    cat <<'EOF' > start
+    cat <<EOF > start
 #!/bin/bash
+
+# Read desktop configuration
+DESKTOP_SESSION="${DESKTOP_SESSION:-xfce}"
 
 # Activate PulseAudio on the network
 pulseaudio --start --load="module-native-protocol-tcp auth-ip-acl=127.0.0.1 auth-anonymous=1" --exit-idle-time=-1 > /dev/null 2>&1
 
-XDG_RUNTIME_DIR=${TMPDIR} termux-x11 :1.0 & > /dev/null 2>&1
+XDG_RUNTIME_DIR=\${TMPDIR} termux-x11 :1.0 & > /dev/null 2>&1
 sleep 1
 
 am start --user 0 -n com.termux.x11/com.termux.x11.MainActivity > /dev/null 2>&1
@@ -2033,21 +2051,38 @@ sleep 1
 
 MESA_NO_ERROR=1 MESA_GL_VERSION_OVERRIDE=4.3COMPAT MESA_GLES_VERSION_OVERRIDE=3.2 virgl_test_server_android --angle-gl & > /dev/null 2>&1
 
-env DISPLAY=:1.0 GALLIUM_DRIVER=virpipe dbus-launch --exit-with-session xfce4-session & > /dev/null 2>&1
+case "\$DESKTOP_SESSION" in
+    lxqt)
+        env DISPLAY=:1.0 GALLIUM_DRIVER=virpipe dbus-launch --exit-with-session startlxqt & > /dev/null 2>&1
+        ;;
+    *)
+        env DISPLAY=:1.0 GALLIUM_DRIVER=virpipe dbus-launch --exit-with-session xfce4-session & > /dev/null 2>&1
+        ;;
+esac
 
 # Set the audio server
 export PULSE_SERVER=127.0.0.1 > /dev/null 2>&1
 
 sleep 5
-process_id=$(ps -aux | grep '[x]fce4-screensaver' | awk '{print $2}')
-kill "$process_id" > /dev/null 2>&1
+
+case "\$DESKTOP_SESSION" in
+    xfce|"")
+        process_id=\$(ps -aux | grep '[x]fce4-screensaver' | awk '{print \$2}')
+        [ -n "\$process_id" ] && kill "\$process_id" > /dev/null 2>&1
+        ;;
+esac
 EOF
 
     execute_command "chmod +x start && mv start $PREFIX/bin" "$(t MSG_INSTALL_START_SCRIPT)"
 
     # Installation of the stop script
-    cat <<'EOF' > "$PREFIX/bin/kill_termux_x11"
+    cat <<EOF > "$PREFIX/bin/kill_termux_x11"
 #!/bin/bash
+
+# Read desktop configuration
+CONFIG_FILE="\$HOME/.config/ohmytermux/desktop.conf"
+DESKTOP_SESSION="xfce"
+[ -f "\$CONFIG_FILE" ] && source "\$CONFIG_FILE"
 
 # Check the execution of the processes in Termux or Proot
 if pgrep -f 'apt|apt-get|dpkg|nala' > /dev/null; then
@@ -2055,38 +2090,46 @@ if pgrep -f 'apt|apt-get|dpkg|nala' > /dev/null; then
     exit 1
 fi
 
-# Get the identifiers of the Termux-X11 and XFCE processes
-termux_x11_pid=$(pgrep -f /system/bin/app_process.*com.termux.x11.Loader)
-xfce_pid=$(pgrep -f "xfce4-session")
+# Get the identifiers of the Termux-X11 and DE processes
+termux_x11_pid=\$(pgrep -f /system/bin/app_process.*com.termux.x11.Loader)
+
+case "\$DESKTOP_SESSION" in
+    lxqt)
+        de_pid=\$(pgrep -f "lxqt-session")
+        de_name="LXQt"
+        ;;
+    *)
+        de_pid=\$(pgrep -f "xfce4-session")
+        de_name="XFCE"
+        ;;
+esac
 
 # Stop the processes only if they exist
-if [ -n "$termux_x11_pid" ]; then
-    kill -9 "$termux_x11_pid" 2>/dev/null
+if [ -n "\$termux_x11_pid" ]; then
+    kill -9 "\$termux_x11_pid" 2>/dev/null
 fi
 
-if [ -n "$xfce_pid" ]; then
-    kill -9 "$xfce_pid" 2>/dev/null
+if [ -n "\$de_pid" ]; then
+    kill -9 "\$de_pid" 2>/dev/null
 fi
 
 # Display dynamic message
-if [ -n "$termux_x11_pid" ] || [ -n "$xfce_pid" ]; then
-    zenity --info --text="Termux-X11 and XFCE sessions closed."
+if [ -n "\$termux_x11_pid" ] || [ -n "\$de_pid" ]; then
+    zenity --info --text="Termux-X11 and \$de_name sessions closed."
 else
-    zenity --info --text="Termux-X11 or XFCE session not found."
+    zenity --info --text="Termux-X11 or \$de_name session not found."
 fi
 
 # Stop the Termux application only if the PID exists
-info_output=$(termux-info)
-if pid=$(echo "$info_output" | grep -o 'TERMUX_APP_PID=[0-9]\+' | awk -F= '{print $2}') && [ -n "$pid" ]; then
-    kill "$pid" 2>/dev/null
+info_output=\$(termux-info)
+if pid=\$(echo "\$info_output" | grep -o 'TERMUX_APP_PID=[0-9]\+' | awk -F= '{print \$2}') && [ -n "\$pid" ]; then
+    kill "\$pid" 2>/dev/null
 fi
 
 exit 0
-
 EOF
 
     execute_command "chmod +x $PREFIX/bin/kill_termux_x11" "$(t MSG_INSTALL_STOP_SCRIPT)"
-
 
     # Creation of the shortcut
     mkdir -p "$PREFIX/share/applications"
