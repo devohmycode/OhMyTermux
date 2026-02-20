@@ -52,41 +52,34 @@ source "$SCRIPT_DIR/lib/i18n_loader.sh"
 USE_GUM=false
 VERBOSE=false
 BROWSER="chromium"
+REDIRECT=">/dev/null 2>&1"
 
 # Configure error handler keys for this script
-ERROR_MSG_KEY="MSG_LXQT_ERROR_INSTALL"
-ERROR_REFER_KEY="MSG_LXQT_ERROR_REFER"
+ERROR_MSG_KEY="MSG_MATE_ERROR_INSTALL"
+ERROR_REFER_KEY="MSG_MATE_ERROR_REFER"
 
 #------------------------------------------------------------------------------
 # DISPLAY HELP
 #------------------------------------------------------------------------------
 show_help() {
     clear
-    echo "$(t "MSG_LXQT_HELP_TITLE")"
+    echo "$(t "MSG_MATE_HELP_TITLE")"
     echo
-    echo "$(t "MSG_LXQT_HELP_USAGE")"
-    echo "$(t "MSG_LXQT_HELP_OPTIONS")"
-    echo "  --gum | -g        $(t "MSG_LXQT_HELP_GUM")"
-    echo "  --verbose | -v    $(t "MSG_LXQT_HELP_VERBOSE")"
-    echo "  --browser | -b    $(t "MSG_LXQT_HELP_BROWSER")"
-    echo "  --version | -ver  $(t "MSG_LXQT_HELP_VERSION")"
-    echo "  --full            $(t "MSG_LXQT_HELP_FULL")"
-    echo "  --help | -h       $(t "MSG_LXQT_HELP_HELP")"
+    echo "$(t "MSG_MATE_HELP_USAGE")"
+    echo "$(t "MSG_MATE_HELP_OPTIONS")"
+    echo "  --gum | -g        $(t "MSG_MATE_HELP_GUM")"
+    echo "  --verbose | -v    $(t "MSG_MATE_HELP_VERBOSE")"
+    echo "  --browser | -b    $(t "MSG_MATE_HELP_BROWSER")"
+    echo "  --version | -ver  $(t "MSG_MATE_HELP_VERSION")"
+    echo "  --full            $(t "MSG_MATE_HELP_FULL")"
+    echo "  --help | -h       $(t "MSG_MATE_HELP_HELP")"
 }
 
 #------------------------------------------------------------------------------
-# CUSTOM VARIABLES
-#------------------------------------------------------------------------------
-INSTALL_THEME=false
-INSTALL_ICONS=false
-INSTALL_CURSORS=false
-SELECTED_ICON_THEME="Papirus"
-
-#------------------------------------------------------------------------------
-# COMPLETE VARIABLES
+# INSTALLATION VARIABLES
 #------------------------------------------------------------------------------
 FULL_INSTALL=false
-LXQT_VERSION=""
+MATE_VERSION=""
 BROWSER_CHOICE=""
 
 #------------------------------------------------------------------------------
@@ -109,12 +102,12 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         --version=*|-ver=*)
-            LXQT_VERSION="${1#*=}"
+            MATE_VERSION="${1#*=}"
             shift
             ;;
         --full)
             FULL_INSTALL=true
-            LXQT_VERSION="recommended"
+            MATE_VERSION="recommended"
             BROWSER_CHOICE="chromium"
             shift
             ;;
@@ -138,22 +131,26 @@ done
 BASE_PKGS=(
     'termux-x11-nightly'
     'virglrenderer-android'
-    'lxqt'
-    'qterminal'
-    'pcmanfm-qt'
-    'openbox'
-    'obconf-qt'
+    'mate-session-manager'
+    'mate-settings-daemon'
+    'mate-panel'
+    'marco'
+    'caja'
+    'mate-terminal'
+    'mate-desktop'
+    'mate-menus'
+    'dbus'
 )
 
 RECOMMENDED_PKGS=(
-    'pavucontrol-qt'
-    'lxqt-archiver'
-    'lximage-qt'
-    'featherpad'
-    'qps'
-    'kvantum'
-    'wmctrl'
+    'pluma'
+    'engrampa'
+    'eom'
+    'mate-applet-brisk-menu'
+    'pavucontrol'
+    'mousepad'
     'netcat-openbsd'
+    'wmctrl'
 )
 
 #------------------------------------------------------------------------------
@@ -164,233 +161,139 @@ configure_browser() {
 
     mkdir -p "$HOME/.local/share/applications"
 
-    # Set default browser in mimeapps.list
     cat > "$HOME/.local/share/applications/mimeapps.list" << MIMEEOF
 [Default Applications]
 x-scheme-handler/http=${browser_name}.desktop
 x-scheme-handler/https=${browser_name}.desktop
 text/html=${browser_name}.desktop
+application/xhtml+xml=${browser_name}.desktop
 MIMEEOF
 }
 
 #------------------------------------------------------------------------------
-# LXQT CONFIGURATION
+# MATE CONFIGURATION
 #------------------------------------------------------------------------------
-configure_lxqt() {
+configure_mate() {
     local version="$1"
     local browser="$2"
 
-    info_msg "$(t MSG_LXQT_BASE_CONFIG)"
+    info_msg "$(t MSG_MATE_BASE_CONFIG)"
 
     # Create config directories
-    mkdir -p "$HOME/.config/lxqt"
-    mkdir -p "$HOME/.config/openbox"
-    mkdir -p "$HOME/.config/qterminal.org"
-    mkdir -p "$HOME/.config/Kvantum"
+    mkdir -p "$HOME/.config/mate"
+    mkdir -p "$HOME/.config/dconf"
+    mkdir -p "$HOME/.local/share/applications"
+    mkdir -p "$HOME/.local/share/mate/panel2.d/default/launchers"
 
     # Configure browser
     if [ "$browser" != "none" ] && [ -n "$browser" ]; then
         configure_browser "$browser"
     fi
 
-    # Generate lxqt.conf
-    info_msg "$(t MSG_LXQT_GENERATE_LXQT_CONF)"
-    cat > "$HOME/.config/lxqt/lxqt.conf" << 'LXQTCONF'
-[General]
-__userfile__=true
+    # Configure mate-terminal
+    info_msg "$(t MSG_MATE_CONFIGURE_TERMINAL)"
+    mkdir -p "$HOME/.config/mate/terminal"
 
-[Appearance]
-icon_theme=Papirus
-cursor_theme=default
-cursor_size=24
+    # Generate dconf settings for MATE
+    info_msg "$(t MSG_MATE_GENERATE_DCONF)"
 
-[Session]
-window_manager=openbox
-LXQTCONF
+    # Apply MATE dconf settings via gsettings (if available) or dconf
+    # Marco window manager settings
+    if command -v gsettings &>/dev/null; then
+        gsettings set org.mate.Marco.general theme 'TraditionalOk' 2>/dev/null || true
+        gsettings set org.mate.Marco.general button-layout 'menu:minimize,maximize,close' 2>/dev/null || true
+        gsettings set org.mate.Marco.general num-workspaces 2 2>/dev/null || true
 
-    # Generate session.conf
-    info_msg "$(t MSG_LXQT_GENERATE_SESSION_CONF)"
-    cat > "$HOME/.config/lxqt/session.conf" << 'SESSIONCONF'
-[General]
-__userfile__=true
-window_manager=openbox
+        # Panel settings
+        gsettings set org.mate.panel default-layout 'default' 2>/dev/null || true
 
-[Environment]
-TERM=xterm-256color
-SESSIONCONF
+        # Interface settings
+        gsettings set org.mate.interface gtk-theme 'TraditionalOk' 2>/dev/null || true
+        gsettings set org.mate.interface icon-theme 'Papirus' 2>/dev/null || true
+        gsettings set org.mate.interface cursor-theme 'default' 2>/dev/null || true
+        gsettings set org.mate.interface font-name 'Sans 10' 2>/dev/null || true
+        gsettings set org.mate.interface document-font-name 'Sans 10' 2>/dev/null || true
+        gsettings set org.mate.interface monospace-font-name 'Monospace 10' 2>/dev/null || true
 
-    # Generate panel.conf
-    info_msg "$(t MSG_LXQT_GENERATE_PANEL_CONF)"
-    cat > "$HOME/.config/lxqt/panel.conf" << 'PANELCONF'
-[General]
-__userfile__=true
-
-[panel1]
-alignment=Left
-animation-duration=0
-background-color=rgba(0, 0, 0, 0)
-background-widget=
-desktop=0
-font-color=#FFFFFF
-hide-on-overlap=false
-hidable=false
-iconSize=32
-lineCount=1
-lockPanel=false
-panelSize=48
-position=Bottom
-reserve-space=true
-show-delay=0
-visible-margin=true
-width=100
-width-percent=true
-
-[panel1/Plugin#0]
-alignment=Left
-type=mainmenu
-
-[panel1/Plugin#1]
-alignment=Left
-type=taskbar
-
-[panel1/Plugin#2]
-alignment=Right
-type=tray
-
-[panel1/Plugin#3]
-alignment=Right
-type=volume
-
-[panel1/Plugin#4]
-alignment=Right
-type=worldclock
-PANELCONF
-
-    # Generate openbox lxqt-rc.xml
-    info_msg "$(t MSG_LXQT_GENERATE_OPENBOX_RC)"
-    cat > "$HOME/.config/openbox/lxqt-rc.xml" << 'OBRC'
-<?xml version="1.0" encoding="UTF-8"?>
-<openbox_config xmlns="http://openbox.org/3.4/rc">
-  <resistance>
-    <strength>10</strength>
-    <screen_edge_strength>20</screen_edge_strength>
-  </resistance>
-  <focus>
-    <focusNew>yes</focusNew>
-    <followMouse>no</followMouse>
-    <focusLast>yes</focusLast>
-    <underMouse>no</underMouse>
-    <focusDelay>200</focusDelay>
-    <raiseOnFocus>no</raiseOnFocus>
-  </focus>
-  <placement>
-    <policy>Smart</policy>
-    <center>yes</center>
-    <monitor>Primary</monitor>
-    <primaryMonitor>1</primaryMonitor>
-  </placement>
-  <theme>
-    <name>Clearlooks</name>
-    <titleLayout>NLIMC</titleLayout>
-    <keepBorder>yes</keepBorder>
-    <animateIconify>yes</animateIconify>
-    <font place="ActiveWindow">
-      <name>sans</name>
-      <size>10</size>
-      <weight>bold</weight>
-      <slant>normal</slant>
-    </font>
-    <font place="InactiveWindow">
-      <name>sans</name>
-      <size>10</size>
-      <weight>bold</weight>
-      <slant>normal</slant>
-    </font>
-  </theme>
-  <desktops>
-    <number>1</number>
-    <firstdesk>1</firstdesk>
-    <names>
-      <name>Desktop</name>
-    </names>
-    <popupTime>875</popupTime>
-  </desktops>
-  <keyboard>
-    <chainQuitKey>C-g</chainQuitKey>
-  </keyboard>
-  <mouse>
-    <dragThreshold>1</dragThreshold>
-    <doubleClickTime>500</doubleClickTime>
-    <screenEdgeWarpTime>400</screenEdgeWarpTime>
-    <screenEdgeWarpMouse>false</screenEdgeWarpMouse>
-  </mouse>
-</openbox_config>
-OBRC
-
-    # Configure qterminal
-    info_msg "$(t MSG_LXQT_CONFIGURE_TERMINAL)"
-    cat > "$HOME/.config/qterminal.org/qterminal.ini" << 'QTERMCONF'
-[General]
-AskOnExit=false
-BoldIntense=true
-BorderWidth=0
-ChangeFontSize=1.5
-Emulation=default
-FixedTabWidth=false
-FixedTabWidthValue=500
-FontAntialias=true
-HideTabBar=true
-HistoryLimited=true
-HistoryLimitedTo=1000
-KeyboardCursorShape=0
-LastWindowMaximized=false
-Scrollbar=2
-TabBarless=false
-Term=xterm-256color
-TerminalMargin=0
-UseFontBoxDrawingChars=false
-colorScheme=Linux
-enabledBidiSupport=true
-fontFamily=Monospace
-fontSize=12
-guiStyle=
-highlightCurrentTerminal=false
-showTerminalSizeHint=true
-version=1.4
-QTERMCONF
-
-    # Configure Kvantum for recommended mode
-    if [ "$version" = "recommended" ]; then
-        info_msg "$(t MSG_LXQT_CONFIGURE_KVANTUM)"
-        cat > "$HOME/.config/Kvantum/kvantum.kvconfig" << 'KVCONF'
-[General]
-theme=KvDarkFresh
-KVCONF
+        # Terminal settings
+        gsettings set org.mate.terminal.global default-profile 'default' 2>/dev/null || true
     fi
 
-    # Save theme config for proot.sh consumption
+    # Generate a minimal MATE autostart entry to disable screensaver
+    mkdir -p "$HOME/.config/autostart"
+    cat > "$HOME/.config/autostart/disable-screensaver.desktop" << 'AUTOSTART'
+[Desktop Entry]
+Type=Application
+Name=Disable Screensaver
+Exec=xset s off -dpms
+Hidden=false
+NoDisplay=true
+X-MATE-Autostart-enabled=true
+AUTOSTART
+
+    # GTK2 theme configuration
+    cat > "$HOME/.gtkrc-2.0" << 'GTKRC'
+gtk-theme-name="TraditionalOk"
+gtk-icon-theme-name="Papirus"
+gtk-font-name="Sans 10"
+gtk-cursor-theme-name="default"
+gtk-cursor-theme-size=24
+gtk-toolbar-style=GTK_TOOLBAR_BOTH_HORIZ
+gtk-toolbar-icon-size=GTK_ICON_SIZE_LARGE_TOOLBAR
+gtk-button-images=0
+gtk-menu-images=0
+gtk-enable-event-sounds=1
+gtk-enable-input-feedback-sounds=0
+gtk-xft-antialias=1
+gtk-xft-hinting=1
+gtk-xft-hintstyle="hintfull"
+gtk-xft-rgba="rgb"
+GTKRC
+
+    # GTK3 settings
+    mkdir -p "$HOME/.config/gtk-3.0"
+    cat > "$HOME/.config/gtk-3.0/settings.ini" << 'GTK3SETTINGS'
+[Settings]
+gtk-theme-name=TraditionalOk
+gtk-icon-theme-name=Papirus
+gtk-font-name=Sans 10
+gtk-cursor-theme-name=default
+gtk-cursor-theme-size=24
+gtk-toolbar-style=GTK_TOOLBAR_BOTH_HORIZ
+gtk-toolbar-icon-size=GTK_ICON_SIZE_LARGE_TOOLBAR
+gtk-button-images=false
+gtk-menu-images=false
+gtk-enable-event-sounds=true
+gtk-enable-input-feedback-sounds=false
+gtk-xft-antialias=1
+gtk-xft-hinting=1
+gtk-xft-hintstyle=hintfull
+gtk-xft-rgba=rgb
+GTK3SETTINGS
+
+    # Save theme config
     mkdir -p "$OHMYTERMUX_CONFIG_DIR" 2>/dev/null
     cat > "$OHMYTERMUX_CONFIG_DIR/theme_config.tmp" << THEMECONF
-INSTALL_THEME=$INSTALL_THEME
+INSTALL_THEME=false
 INSTALL_ICONS=true
 INSTALL_WALLPAPERS=false
-INSTALL_CURSORS=$INSTALL_CURSORS
+INSTALL_CURSORS=false
 SELECTED_THEME=""
 SELECTED_ICON_THEME="Papirus"
 SELECTED_WALLPAPER=""
-DESKTOP_ENV=lxqt
+DESKTOP_ENV=mate
 THEMECONF
 
-    # Save desktop session for start/stop scripts
-    echo "DESKTOP_SESSION=lxqt" > "$OHMYTERMUX_CONFIG_DIR/desktop.conf"
+    # Save desktop session
+    echo "DESKTOP_SESSION=mate" > "$OHMYTERMUX_CONFIG_DIR/desktop.conf"
 }
 
 #------------------------------------------------------------------------------
 # INSTALL ICONS (Papirus)
 #------------------------------------------------------------------------------
 install_icons() {
-    info_msg "$(t MSG_LXQT_INSTALL_ICONS)"
-    execute_command "pkg install -y papirus-icon-theme" "$(t MSG_LXQT_INSTALLATION_OF) Papirus"
+    info_msg "$(t MSG_MATE_INSTALL_ICONS)"
+    execute_command "pkg install -y papirus-icon-theme" "$(t MSG_MATE_INSTALLATION_OF) Papirus"
 }
 
 #------------------------------------------------------------------------------
@@ -400,10 +303,10 @@ install_browser() {
     local browser="$1"
     case "$browser" in
         chromium)
-            execute_command "pkg install -y chromium" "$(t MSG_LXQT_CHROMIUM_INSTALLATION)"
+            execute_command "pkg install -y chromium" "$(t MSG_MATE_CHROMIUM_INSTALLATION)"
             ;;
         firefox)
-            execute_command "pkg install -y firefox" "$(t MSG_LXQT_FIREFOX_INSTALLATION)"
+            execute_command "pkg install -y firefox" "$(t MSG_MATE_FIREFOX_INSTALLATION)"
             ;;
     esac
 }
@@ -412,22 +315,22 @@ install_browser() {
 # MAIN
 #------------------------------------------------------------------------------
 main() {
-    title_msg "$(t MSG_LXQT_INSTALL_LXQT)"
+    title_msg "$(t MSG_MATE_INSTALL_MATE)"
 
     # Update packages
-    execute_command "pkg update -y" "$(t MSG_LXQT_UPDATE_PACKAGES)"
+    execute_command "pkg update -y" "$(t MSG_MATE_UPDATE_PACKAGES)"
 
     # Install base packages
-    subtitle_msg "$(t MSG_LXQT_BASE_PACKAGES)"
+    subtitle_msg "$(t MSG_MATE_BASE_PACKAGES)"
     for pkg in "${BASE_PKGS[@]}"; do
-        execute_command "pkg install -y $pkg" "$(t MSG_LXQT_INSTALLATION_OF) $pkg"
+        execute_command "pkg install -y $pkg" "$(t MSG_MATE_INSTALLATION_OF) $pkg"
     done
 
-    # Install recommended packages if version is recommended
-    if [ "$LXQT_VERSION" = "recommended" ]; then
-        subtitle_msg "$(t MSG_LXQT_RECOMMENDED_PACKAGES)"
+    # Install recommended packages
+    if [ "$MATE_VERSION" = "recommended" ]; then
+        subtitle_msg "$(t MSG_MATE_RECOMMENDED_PACKAGES)"
         for pkg in "${RECOMMENDED_PKGS[@]}"; do
-            execute_command "pkg install -y $pkg" "$(t MSG_LXQT_INSTALLATION_OF) $pkg"
+            execute_command "pkg install -y $pkg" "$(t MSG_MATE_INSTALLATION_OF) $pkg"
         done
     fi
 
@@ -436,67 +339,64 @@ main() {
         install_browser "$BROWSER_CHOICE"
     fi
 
-    # Install icons for recommended mode
-    if [ "$LXQT_VERSION" = "recommended" ]; then
-        install_icons
-    fi
+    # Install icons
+    install_icons
 
-    # Configure LXQt
-    title_msg "$(t MSG_LXQT_ELEMENTS_INSTALLATION)"
-    configure_lxqt "$LXQT_VERSION" "$BROWSER_CHOICE"
+    # Configure MATE
+    title_msg "$(t MSG_MATE_ELEMENTS_INSTALLATION)"
+    configure_mate "$MATE_VERSION" "$BROWSER_CHOICE"
 
-    # Update the start script for LXQt
-    title_msg "$(t MSG_LXQT_INSTALL_LXQT) - start"
+    # Update the start/stop scripts for MATE
+    title_msg "$(t MSG_MATE_INSTALL_MATE) - start"
     _update_start_script
 
-    success_msg "$(t MSG_LXQT_INSTALL_LXQT) ✓"
+    success_msg "$(t MSG_MATE_INSTALL_MATE) ✓"
 }
 
 #------------------------------------------------------------------------------
-# UPDATE START / STOP SCRIPTS FOR LXQT
+# UPDATE START / STOP SCRIPTS FOR MATE
 #------------------------------------------------------------------------------
 _update_start_script() {
-    info_msg "$(t MSG_LXQT_BASE_CONFIG) - start/stop"
+    info_msg "$(t MSG_MATE_BASE_CONFIG) - start/stop"
 
-    # Write the start script
     cat > "$PREFIX/bin/start" << 'STARTEOF'
 #!/bin/bash
 
 # ---------------------------------------------------------------------------
 # OhMyTermux - start
-# Démarre Termux-X11 avec XFCE, LXQt ou MATE selon l'environnement installé
+# Starts Termux-X11 with XFCE, LXQt or MATE depending on installed environment
 # ---------------------------------------------------------------------------
 
 OHMYTERMUX_CONFIG="$HOME/.config/OhMyTermux"
 
 # ---------------------------------------------------------------------------
-# NETTOYAGE DU SERVEUR X EXISTANT
+# CLEAN UP EXISTING X SERVER
 # ---------------------------------------------------------------------------
-pkill -f "termux.x11"   > /dev/null 2>&1
-pkill -f "Xwayland"     > /dev/null 2>&1
-pkill -f "xfce4-session"> /dev/null 2>&1
-pkill -f "lxqt-session" > /dev/null 2>&1
-pkill -f "startlxqt"    > /dev/null 2>&1
-pkill -f "mate-session" > /dev/null 2>&1
-pkill -f "openbox"      > /dev/null 2>&1
-pkill -f "marco"        > /dev/null 2>&1
+pkill -f "termux.x11"    > /dev/null 2>&1
+pkill -f "Xwayland"      > /dev/null 2>&1
+pkill -f "xfce4-session" > /dev/null 2>&1
+pkill -f "lxqt-session"  > /dev/null 2>&1
+pkill -f "startlxqt"     > /dev/null 2>&1
+pkill -f "mate-session"  > /dev/null 2>&1
+pkill -f "openbox"       > /dev/null 2>&1
+pkill -f "marco"         > /dev/null 2>&1
 sleep 1
 
-# Supprimer les verrous X11 résiduels
-rm -f /tmp/.X1-lock          > /dev/null 2>&1
-rm -f /tmp/.X11-unix/X1      > /dev/null 2>&1
+# Remove residual X11 locks
+rm -f /tmp/.X1-lock         > /dev/null 2>&1
+rm -f /tmp/.X11-unix/X1     > /dev/null 2>&1
 
 # ---------------------------------------------------------------------------
-# DÉTECTER L'ENVIRONNEMENT DE BUREAU
+# DETECT DESKTOP ENVIRONMENT
 # ---------------------------------------------------------------------------
 DESKTOP_SESSION="unknown"
 
-# 1. Lire depuis desktop.conf (priorité haute - écrit par install.sh / lxqt.sh)
+# 1. Read from desktop.conf (high priority - written by install.sh / mate.sh / lxqt.sh)
 if [ -f "$OHMYTERMUX_CONFIG/desktop.conf" ]; then
     source "$OHMYTERMUX_CONFIG/desktop.conf"
 fi
 
-# 2. Fallback : lire depuis theme_config.tmp (écrit par lxqt.sh)
+# 2. Fallback: read from theme_config.tmp
 if [ "$DESKTOP_SESSION" = "unknown" ] || [ -z "$DESKTOP_SESSION" ]; then
     if [ -f "$OHMYTERMUX_CONFIG/theme_config.tmp" ]; then
         DETECTED=$(grep '^DESKTOP_ENV=' "$OHMYTERMUX_CONFIG/theme_config.tmp" | cut -d'=' -f2 | tr -d '"')
@@ -504,7 +404,7 @@ if [ "$DESKTOP_SESSION" = "unknown" ] || [ -z "$DESKTOP_SESSION" ]; then
     fi
 fi
 
-# 3. Fallback final : détecter par la présence des binaires
+# 3. Final fallback: detect by binary presence
 if [ "$DESKTOP_SESSION" = "unknown" ] || [ -z "$DESKTOP_SESSION" ]; then
     if command -v mate-session > /dev/null 2>&1; then
         DESKTOP_SESSION="mate"
@@ -513,7 +413,7 @@ if [ "$DESKTOP_SESSION" = "unknown" ] || [ -z "$DESKTOP_SESSION" ]; then
     elif command -v xfce4-session > /dev/null 2>&1; then
         DESKTOP_SESSION="xfce"
     else
-        echo "[start] Aucun environnement de bureau détecté (xfce4-session, startlxqt ou mate-session)."
+        echo "[start] No desktop environment detected (xfce4-session, startlxqt or mate-session)."
         exit 1
     fi
 fi
@@ -528,7 +428,7 @@ pulseaudio --start \
 export PULSE_SERVER=127.0.0.1
 
 # ---------------------------------------------------------------------------
-# DÉMARRER TERMUX-X11
+# START TERMUX-X11
 # ---------------------------------------------------------------------------
 XDG_RUNTIME_DIR=${TMPDIR} termux-x11 :1.0 &> /dev/null &
 sleep 1
@@ -537,7 +437,7 @@ am start --user 0 -n com.termux.x11/com.termux.x11.MainActivity > /dev/null 2>&1
 sleep 1
 
 # ---------------------------------------------------------------------------
-# VIRGL (rendu GPU)
+# VIRGL (GPU rendering)
 # ---------------------------------------------------------------------------
 GPU_VENDOR="unknown"
 if [ -f "$OHMYTERMUX_CONFIG/gpu_vendor" ]; then
@@ -554,7 +454,7 @@ fi
 sleep 1
 
 # ---------------------------------------------------------------------------
-# DÉMARRER LA SESSION DE BUREAU
+# START DESKTOP SESSION
 # ---------------------------------------------------------------------------
 export DISPLAY=:1.0
 export GALLIUM_DRIVER=virpipe
@@ -582,8 +482,8 @@ case "$DESKTOP_SESSION" in
         [ -n "$process_id" ] && kill "$process_id" > /dev/null 2>&1
         ;;
     *)
-        echo "[start] Environnement de bureau non reconnu : $DESKTOP_SESSION"
-        echo "        Valeurs acceptées : xfce, lxqt, mate"
+        echo "[start] Unknown desktop environment: $DESKTOP_SESSION"
+        echo "        Accepted values: xfce, lxqt, mate"
         exit 1
         ;;
 esac
@@ -591,12 +491,12 @@ STARTEOF
 
     chmod +x "$PREFIX/bin/start"
 
-    # Update the stop script to handle both XFCE and LXQt
+    # Update the stop script to handle XFCE, LXQt and MATE
     cat > "$PREFIX/bin/kill_termux_x11" << STOPEOF
 #!/bin/bash
 
 OHMYTERMUX_CONFIG="\$HOME/.config/OhMyTermux"
-DESKTOP_SESSION="lxqt"
+DESKTOP_SESSION="mate"
 [ -f "\$OHMYTERMUX_CONFIG/desktop.conf" ] && source "\$OHMYTERMUX_CONFIG/desktop.conf"
 
 if pgrep -f 'apt|apt-get|dpkg|nala' > /dev/null; then
@@ -610,45 +510,42 @@ virgl_pid=\$(pgrep -f "virgl_test_server")
 case "\$DESKTOP_SESSION" in
     mate)
         de_pid=\$(pgrep -f "mate-session")
-        ob_pid=\$(pgrep -f "marco")
+        wm_pid=\$(pgrep -f "marco")
         de_name="MATE"
         ;;
     lxqt)
         de_pid=\$(pgrep -f "lxqt-session")
-        ob_pid=\$(pgrep -f "openbox")
+        wm_pid=\$(pgrep -f "openbox")
         de_name="LXQt"
         ;;
     *)
         de_pid=\$(pgrep -f "xfce4-session")
-        ob_pid=""
+        wm_pid=""
         de_name="XFCE"
         ;;
 esac
 
 [ -n "\$termux_x11_pid" ] && kill -9 "\$termux_x11_pid" 2>/dev/null
 [ -n "\$de_pid"          ] && kill -9 "\$de_pid"         2>/dev/null
-[ -n "\$ob_pid"          ] && kill -9 "\$ob_pid"         2>/dev/null
+[ -n "\$wm_pid"          ] && kill -9 "\$wm_pid"         2>/dev/null
 [ -n "\$virgl_pid"       ] && kill -9 "\$virgl_pid"      2>/dev/null
 
 rm -f /tmp/.X1-lock       2>/dev/null
 rm -f /tmp/.X11-unix/X1   2>/dev/null
 
 if [ -n "\$termux_x11_pid" ] || [ -n "\$de_pid" ]; then
-    zenity --info --text="Termux-X11 and \$de_name sessions closed."
+    zenity --info --title="Session closed" \
+        --text="Termux-X11 and \$de_name session closed." 2>/dev/null || true
 else
-    zenity --info --text="Termux-X11 or \$de_name session not found."
+    zenity --info --title="Session not found" \
+        --text="Termux-X11 or \$de_name session not found." 2>/dev/null || true
 fi
-
-info_output=\$(termux-info)
-if pid=\$(echo "\$info_output" | grep -o 'TERMUX_APP_PID=[0-9]\+' | awk -F= '{print \$2}') && [ -n "\$pid" ]; then
-    kill "\$pid" 2>/dev/null
-fi
-
-exit 0
 STOPEOF
 
     chmod +x "$PREFIX/bin/kill_termux_x11"
 }
 
-# Run main
+#------------------------------------------------------------------------------
+# ENTRY POINT
+#------------------------------------------------------------------------------
 main

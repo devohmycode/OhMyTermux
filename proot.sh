@@ -49,8 +49,15 @@ done
 #------------------------------------------------------------------------------
 _loader_url="https://raw.githubusercontent.com/devohmycode/OhMyTermux/$BRANCH/lib/i18n_loader.sh"
 mkdir -p "$SCRIPT_DIR/lib"
-if [ ! -f "$SCRIPT_DIR/lib/i18n_loader.sh" ]; then
-    curl -fL -s -o "$SCRIPT_DIR/lib/i18n_loader.sh" "$_loader_url" 2>/dev/null
+# Always try to refresh i18n_loader.sh; fall back to cached version if download fails
+_loader_tmp=$(mktemp 2>/dev/null || echo "$SCRIPT_DIR/lib/i18n_loader.sh.tmp")
+if curl -fL -s -o "$_loader_tmp" "$_loader_url" 2>/dev/null && head -1 "$_loader_tmp" 2>/dev/null | grep -q "^#!/bin/bash"; then
+    mv "$_loader_tmp" "$SCRIPT_DIR/lib/i18n_loader.sh"
+else
+    rm -f "$_loader_tmp" 2>/dev/null
+    if [ ! -f "$SCRIPT_DIR/lib/i18n_loader.sh" ]; then
+        echo "Warning: Could not download i18n_loader.sh and no cached version available" >&2
+    fi
 fi
 source "$SCRIPT_DIR/lib/i18n_loader.sh"
 

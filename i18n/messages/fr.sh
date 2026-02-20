@@ -7,6 +7,9 @@
 # Les messages sont organisés par catégorie pour une meilleure maintenabilité.
 # =============================================================================
 
+# Version identifier - used to detect stale cached message files
+MSG_I18N_VERSION="1.2.2"
+
 # Messages généraux
 MSG_WELCOME="Bienvenue dans OhMyTermux"
 MSG_BANNER_TITLE="OHMYTERMUX"
@@ -313,6 +316,17 @@ MSG_CREATE_SHORTCUT="Création du raccourci"
 MSG_SELECT_DESKTOP="Sélectionnez l'environnement de bureau :"
 MSG_DESKTOP_XFCE="XFCE (GTK, classique)"
 MSG_DESKTOP_LXQT="LXQt (Qt, léger)"
+MSG_DESKTOP_MATE="MATE (GTK, traditionnel)"
+
+# Messages d'installation MATE
+MSG_CONFIG_MATE="❯ Configuration de MATE"
+MSG_CONFIRM_INSTALL_MATE="Installer MATE ?"
+MSG_SELECT_MATE_VERSION="Sélectionnez la version MATE à installer :"
+MSG_MATE_MINIMAL="1) Minimale"
+MSG_MATE_RECOMMENDED="2) Recommandée"
+
+# Messages des scripts MATE
+MSG_CONFIG_MATE_SCRIPTS="❯ Configuration des scripts MATE"
 
 # Messages d'installation LXQt
 MSG_CONFIG_LXQT="❯ Configuration de LXQt"
@@ -536,6 +550,39 @@ MSG_LXQT_CHROMIUM_SHORTCUT="Configuration du raccourci Chromium"
 MSG_LXQT_ELEMENTS_INSTALLATION="❯ Installation des éléments LXQt"
 MSG_LXQT_CONFIG_DOWNLOAD="Téléchargement de la configuration LXQt"
 MSG_LXQT_CONFIG_INSTALLATION="Installation de la configuration LXQt"
+
+# Messages du script MATE
+MSG_MATE_HELP_TITLE="Aide OhMyTermux - MATE"
+MSG_MATE_HELP_USAGE="Utilisation: \$0 [OPTIONS]"
+MSG_MATE_HELP_OPTIONS="Options:"
+MSG_MATE_HELP_GUM="Utiliser gum pour l'interface utilisateur"
+MSG_MATE_HELP_VERBOSE="Afficher les sorties détaillées"
+MSG_MATE_HELP_BROWSER="Choisir le navigateur (Chromium ou Firefox)"
+MSG_MATE_HELP_VERSION="Choisir le type d'installation (minimale, recommandée)"
+MSG_MATE_HELP_FULL="Installer tous les modules sans confirmation"
+MSG_MATE_HELP_HELP="Afficher ce message d'aide"
+MSG_MATE_ERROR_INSTALL="ERREUR : Installation de MATE impossible."
+MSG_MATE_ERROR_REFER="Veuillez consulter le(s) message(s) d'erreur ci-dessus."
+MSG_MATE_CONFIGURE_BROWSER="Configurer le navigateur par défaut"
+MSG_MATE_CREATE_MIMEAPPS="Créer le fichier mimeapps.list"
+MSG_MATE_CONFIGURE_TERMINAL="Configurer mate-terminal"
+MSG_MATE_BASE_CONFIG="Configuration de base"
+MSG_MATE_GENERATE_DCONF="Générer les paramètres dconf"
+MSG_MATE_INSTALL_ICONS="Installer les icônes"
+MSG_MATE_INSTALL_CURSORS="Installer les curseurs"
+MSG_MATE_INSTALL_GUM="Installation de gum"
+MSG_MATE_INSTALL_MATE="❯ Installation de MATE"
+MSG_MATE_UPDATE_PACKAGES="Mise à jour des paquets"
+MSG_MATE_BASE_PACKAGES="Paquets de base"
+MSG_MATE_RECOMMENDED_PACKAGES="Paquets recommandés"
+MSG_MATE_PACKAGES_INSTALLATION="❯ Installation des paquets"
+MSG_MATE_INSTALLATION_OF="Installation de"
+MSG_MATE_FIREFOX_INSTALLATION="Installation de Firefox"
+MSG_MATE_FIREFOX_SHORTCUT="Configuration du raccourci Firefox"
+MSG_MATE_CHROMIUM_INSTALLATION="Installation de Chromium"
+MSG_MATE_CHROMIUM_SHORTCUT="Configuration du raccourci Chromium"
+MSG_MATE_ELEMENTS_INSTALLATION="❯ Installation des éléments MATE"
+MSG_MATE_CONFIG_INSTALLATION="Installation de la configuration MATE"
 
 # Messages du script PROOT
 MSG_PROOT_HELP_TITLE="Aide OhMyTermux"

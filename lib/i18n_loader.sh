@@ -59,6 +59,41 @@ if [ ! -f "$SCRIPT_DIR/i18n/i18n.sh" ] || ! _validate_script "$SCRIPT_DIR/i18n/i
     fi
 fi
 
+#------------------------------------------------------------------------------
+# Refresh message files if they are outdated (version mismatch)
+# MSG_I18N_VERSION must match BRANCH; if not, re-download en.sh and fr.sh
+#------------------------------------------------------------------------------
+_check_and_refresh_messages() {
+    local _expected_version="${BRANCH}"
+    local _en_file="$SCRIPT_DIR/i18n/messages/en.sh"
+    local _needs_refresh=false
+
+    # If message files don't exist, refresh is needed
+    if [ ! -f "$_en_file" ]; then
+        _needs_refresh=true
+    else
+        # Source only the version variable to check it without polluting the env
+        local _current_version
+        _current_version=$(grep '^MSG_I18N_VERSION=' "$_en_file" 2>/dev/null | head -1 | cut -d'"' -f2)
+        if [ -z "$_current_version" ] || [ "$_current_version" != "$_expected_version" ]; then
+            _needs_refresh=true
+        fi
+    fi
+
+    if [ "$_needs_refresh" = "true" ]; then
+        mkdir -p "$SCRIPT_DIR/i18n/messages"
+        local _base_url="${_BOOTSTRAP_BASE_URL:-https://raw.githubusercontent.com/devohmycode/OhMyTermux/$BRANCH}"
+        for _lang in en fr; do
+            curl -fL -s -o "$SCRIPT_DIR/i18n/messages/${_lang}.sh" \
+                "$_base_url/i18n/messages/${_lang}.sh" 2>/dev/null || true
+        done
+    fi
+}
+
+if [ "${MESSAGES_LOADED}" != "fallback" ]; then
+    _check_and_refresh_messages
+fi
+
 if [ -f "$SCRIPT_DIR/i18n/i18n.sh" ] && _validate_script "$SCRIPT_DIR/i18n/i18n.sh"; then
     source "$SCRIPT_DIR/i18n/i18n.sh"
 fi

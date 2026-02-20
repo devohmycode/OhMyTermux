@@ -72,8 +72,15 @@ FISHRC="$HOME/.config/fish/config.fish"
 OHMYTERMUX_REPO_URL="${OHMYTERMUX_REPO_URL:-https://raw.githubusercontent.com/devohmycode/OhMyTermux}"
 _loader_url="$OHMYTERMUX_REPO_URL/$BRANCH/lib/i18n_loader.sh"
 mkdir -p "$SCRIPT_DIR/lib"
-if [ ! -f "$SCRIPT_DIR/lib/i18n_loader.sh" ]; then
-    curl -fL -s -o "$SCRIPT_DIR/lib/i18n_loader.sh" "$_loader_url" 2>/dev/null
+# Always try to refresh i18n_loader.sh; fall back to cached version if download fails
+_loader_tmp=$(mktemp 2>/dev/null || echo "$SCRIPT_DIR/lib/i18n_loader.sh.tmp")
+if curl -fL -s -o "$_loader_tmp" "$_loader_url" 2>/dev/null && head -1 "$_loader_tmp" 2>/dev/null | grep -q "^#!/bin/bash"; then
+    mv "$_loader_tmp" "$SCRIPT_DIR/lib/i18n_loader.sh"
+else
+    rm -f "$_loader_tmp" 2>/dev/null
+    if [ ! -f "$SCRIPT_DIR/lib/i18n_loader.sh" ]; then
+        echo "Warning: Could not download i18n_loader.sh and no cached version available" >&2
+    fi
 fi
 I18N_DEFER_INIT=true
 source "$SCRIPT_DIR/lib/i18n_loader.sh"
@@ -219,7 +226,7 @@ while [[ $# -gt 0 ]]; do
             DESKTOP_CHOICE=true
             ONLY_GUM=false
             shift
-            if [ -n "$1" ] && [[ "$1" =~ ^(xfce|lxqt)$ ]]; then
+            if [ -n "$1" ] && [[ "$1" =~ ^(xfce|lxqt|mate)$ ]]; then
                 DESKTOP_ENV="$1"
                 shift
             fi
@@ -1820,23 +1827,25 @@ install_desktop() {
         # If DESKTOP_ENV not set, prompt user to choose
         if [ -z "$DESKTOP_ENV" ]; then
             if $USE_GUM; then
-                DESKTOP_ENV=$(gum_choose "$(t MSG_SELECT_DESKTOP)" --height=4 --selected="XFCE" "XFCE" "LXQt")
+                DESKTOP_ENV=$(gum_choose "$(t MSG_SELECT_DESKTOP)" --height=5 --selected="XFCE" "XFCE" "LXQt" "MATE")
                 DESKTOP_ENV=$(echo "$DESKTOP_ENV" | tr '[:upper:]' '[:lower:]')
             else
                 echo -e "${COLOR_BLUE}$(t MSG_SELECT_DESKTOP)${COLOR_RESET}"
                 echo
                 echo "1) $(t MSG_DESKTOP_XFCE)"
                 echo "2) $(t MSG_DESKTOP_LXQT)"
+                echo "3) $(t MSG_DESKTOP_MATE)"
                 echo
-                printf "${COLOR_GOLD}$(t MSG_ENTER_CHOICE_12) : ${COLOR_RESET}"
+                printf "${COLOR_GOLD}$(t MSG_ENTER_CHOICE_123) : ${COLOR_RESET}"
                 tput setaf 3
                 read -r -e -p "" -i "1" CHOICE
                 tput sgr0
-                tput cuu 6
+                tput cuu 7
                 tput ed
                 case $CHOICE in
                     1) DESKTOP_ENV="xfce" ;;
                     2) DESKTOP_ENV="lxqt" ;;
+                    3) DESKTOP_ENV="mate" ;;
                     *) DESKTOP_ENV="xfce" ;;
                 esac
             fi
@@ -1849,6 +1858,7 @@ install_desktop() {
         case "$DESKTOP_ENV" in
             xfce) _install_xfce ;;
             lxqt) _install_lxqt ;;
+            mate) _install_mate ;;
         esac
     fi
 }
@@ -2013,6 +2023,89 @@ _install_lxqt() {
         download_and_execute "$OHMYTERMUX_REPO_URL/$BRANCH/lxqt.sh" "LXQt" --gum --version="$LXQT_VERSION" --browser="$BROWSER_CHOICE"
     else
         download_and_execute "$OHMYTERMUX_REPO_URL/$BRANCH/lxqt.sh" "LXQt" --version="$LXQT_VERSION" --browser="$BROWSER_CHOICE"
+    fi
+}
+
+#------------------------------------------------------------------------------
+# INSTALLATION OF MATE
+#------------------------------------------------------------------------------
+_install_mate() {
+    title_msg "$(t MSG_CONFIG_MATE)"
+    local MATE_VERSION="recommended"
+    local BROWSER_CHOICE="chromium"
+
+    if ! $FULL_INSTALL; then
+        if $USE_GUM; then
+            if gum_confirm "$(t MSG_CONFIRM_INSTALL_MATE)"; then
+                MATE_VERSION=$(gum_choose "$(t MSG_SELECT_MATE_VERSION)" --height=4 --selected="recommended" \
+                "minimal" \
+                "recommended")
+
+                if [ "$MATE_VERSION" != "minimal" ]; then
+                    BROWSER_CHOICE=$(gum_choose "$(t MSG_SELECT_BROWSER)" --height=5 --selected="chromium" "chromium" "firefox" "none")
+                fi
+            else
+                return
+            fi
+        else
+            printf "${COLOR_BLUE}$(t MSG_CONFIRM_INSTALL_MATE) (O/n) : ${COLOR_RESET}"
+            read -r -e -p "" -i "o" CHOICE
+            if [[ "$CHOICE" =~ ^[oO]$ ]]; then
+                echo -e "${COLOR_BLUE}$(t MSG_SELECT_MATE_VERSION)${COLOR_RESET}"
+                echo
+                echo "$(t MSG_MATE_MINIMAL)"
+                echo "$(t MSG_MATE_RECOMMENDED)"
+                echo
+                printf "${COLOR_GOLD}$(t MSG_ENTER_CHOICE_12) : ${COLOR_RESET}"
+                tput setaf 3
+                read -r -e -p "" -i "2" CHOICE
+                tput sgr0
+                tput cuu 6
+                tput ed
+                case $CHOICE in
+                    1) MATE_VERSION="minimal" ;;
+                    2) MATE_VERSION="recommended" ;;
+                    *) MATE_VERSION="recommended" ;;
+                esac
+
+                if [ "$MATE_VERSION" != "minimal" ]; then
+                    echo -e "${COLOR_BLUE}$(t MSG_SELECT_BROWSER)${COLOR_RESET}"
+                    echo
+                    echo "$(t MSG_BROWSER_CHROMIUM)"
+                    echo "$(t MSG_BROWSER_FIREFOX)"
+                    echo "$(t MSG_BROWSER_NONE)"
+                    echo
+                    printf "${COLOR_GOLD}$(t MSG_ENTER_CHOICE_BROWSER) ${COLOR_RESET}"
+                    tput setaf 3
+                    read -r -e -p "" -i "1" CHOICE
+                    tput sgr0
+                    tput cuu 7
+                    tput ed
+                    case $CHOICE in
+                        1) BROWSER_CHOICE="chromium" ;;
+                        2) BROWSER_CHOICE="firefox" ;;
+                        3) BROWSER_CHOICE="none" ;;
+                        *) BROWSER_CHOICE="chromium" ;;
+                    esac
+                fi
+            else
+                return
+            fi
+        fi
+    fi
+
+    execute_command "pkg install ncurses-ui-libs -y" "$(t MSG_INSTALL_DEPENDENCIES)"
+
+    PACKAGES=('wget' 'x11-repo' 'tur-repo' 'pulseaudio')
+
+    for PACKAGE in "${PACKAGES[@]}"; do
+        execute_command "pkg install -y $PACKAGE" "$(t MSG_INSTALLATION_OF) $PACKAGE"
+    done
+
+    if $USE_GUM; then
+        download_and_execute "$OHMYTERMUX_REPO_URL/$BRANCH/mate.sh" "MATE" --gum --version="$MATE_VERSION" --browser="$BROWSER_CHOICE"
+    else
+        download_and_execute "$OHMYTERMUX_REPO_URL/$BRANCH/mate.sh" "MATE" --version="$MATE_VERSION" --browser="$BROWSER_CHOICE"
     fi
 }
 
