@@ -4,7 +4,7 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # GitHub branch for downloads
-BRANCH="1.2.1"
+BRANCH="1.2.2"
 
 # Language override variable
 OVERRIDE_LANG=""
