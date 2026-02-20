@@ -377,10 +377,10 @@ PRESET_SOLARIZED="Solarized"
 MSG_UTILS_COMMENT_PRUN="Lancer des programmes dans le terminal proot"
 MSG_UTILS_COMMENT_ZRUN="Lancer des programmes avec le pilote Zink"
 MSG_UTILS_COMMENT_ZRUN_HUD="Afficher le HUD de Zink"
-MSG_UTILS_COMMENT_CP2MENU="Lancer des programmes à partir du menu xfce au lieu du terminal"
+MSG_UTILS_COMMENT_CP2MENU="Lancer des programmes à partir du menu de bureau au lieu du terminal"
 MSG_UTILS_COMMENT_APP_INSTALLER="Installer des apps indisponibles dans les dépôts Termux / Debian proot"
-MSG_UTILS_COMMENT_START_SCRIPT="Démarrer Termux-X11 et XFCE"
-MSG_UTILS_COMMENT_STOP_SCRIPT="Stopper Termux-X11 et XFCE"
+MSG_UTILS_COMMENT_START_SCRIPT="Démarrer la session de bureau Termux-X11"
+MSG_UTILS_COMMENT_STOP_SCRIPT="Arrêter la session de bureau Termux-X11"
 
 # Messages CP2MENU
 MSG_CP2MENU_CHOOSE_ACTION="Choisir une action"
