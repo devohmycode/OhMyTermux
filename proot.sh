@@ -210,28 +210,20 @@ detect_gpu() {
 }
 
 #------------------------------------------------------------------------------
-# MESA-VULKAN INSTALLATION
+# GPU DETECTION, SAVE AND MESA-VULKAN INSTALLATION
 #------------------------------------------------------------------------------
 install_mesa_vulkan() {
     info_msg "$(t "MSG_PROOT_GPU_DETECTING")"
     detect_gpu
 
-    # Save GPU vendor for other scripts (utils.sh)
+    # Save GPU vendor for other scripts (zrun, zrunhud in utils.sh)
     mkdir -p "$OHMYTERMUX_CONFIG_DIR"
     echo "$GPU_VENDOR" > "$OHMYTERMUX_CONFIG_DIR/gpu_vendor"
 
     case "$GPU_VENDOR" in
         adreno)
             info_msg "$(printf "$(t "MSG_PROOT_GPU_DETECTED")" "$(t "MSG_PROOT_GPU_ADRENO")")"
-            local MESA_PACKAGE="mesa-vulkan-kgsl_24.1.0-devel-20240120_arm64.deb"
-            local MESA_URL="$OHMYTERMUX_REPO_URL/$BRANCH/src/$MESA_PACKAGE"
-
-            if ! proot-distro login debian --shared-tmp -- dpkg -s mesa-vulkan-kgsl &> /dev/null; then
-                execute_command "curl -fL -o $PREFIX/tmp/$MESA_PACKAGE $MESA_URL" "$(t "MSG_PROOT_MESA_DOWNLOAD")"
-                execute_command "proot-distro login debian --shared-tmp -- apt install -y /tmp/$MESA_PACKAGE" "$(t "MSG_PROOT_MESA_INSTALLATION")"
-            else
-                info_msg "$(t "MSG_PROOT_MESA_ALREADY_INSTALLED")"
-            fi
+            execute_command "proot-distro login debian --shared-tmp -- apt install -y mesa-vulkan-drivers" "$(t "MSG_PROOT_MESA_INSTALLATION")"
             ;;
         mali)
             info_msg "$(printf "$(t "MSG_PROOT_GPU_DETECTED")" "$(t "MSG_PROOT_GPU_MALI")")"
