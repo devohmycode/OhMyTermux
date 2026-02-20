@@ -1809,92 +1809,206 @@ install_font() {
 }
 
 #------------------------------------------------------------------------------
-# INSTALLATION OF THE XFCE ENVIRONMENT
+# INSTALLATION OF THE DESKTOP ENVIRONMENT
 #------------------------------------------------------------------------------
-install_xfce() {
-    if $XFCE_CHOICE; then
-        title_msg "$(t MSG_CONFIG_XFCE)"
-        local XFCE_VERSION="recommended"
-        local BROWSER_CHOICE="chromium"
-
-        if ! $FULL_INSTALL; then
+install_desktop() {
+    if $DESKTOP_CHOICE; then
+        # If DESKTOP_ENV not set, prompt user to choose
+        if [ -z "$DESKTOP_ENV" ]; then
             if $USE_GUM; then
-                if gum_confirm "$(t MSG_CONFIRM_INSTALL_XFCE)"; then
-                    # Choice of the version
-                    XFCE_VERSION=$(gum_choose "$(t MSG_SELECT_XFCE_VERSION)" --height=5 --selected="recommended" \
-                    "minimal" \
-                    "recommended" \
-                    "customized")
+                DESKTOP_ENV=$(gum_choose "$(t MSG_SELECT_DESKTOP)" --height=4 --selected="XFCE" "XFCE" "LXQt")
+                DESKTOP_ENV=$(echo "$DESKTOP_ENV" | tr '[:upper:]' '[:lower:]')
+            else
+                echo -e "${COLOR_BLUE}$(t MSG_SELECT_DESKTOP)${COLOR_RESET}"
+                echo
+                echo "1) $(t MSG_DESKTOP_XFCE)"
+                echo "2) $(t MSG_DESKTOP_LXQT)"
+                echo
+                printf "${COLOR_GOLD}$(t MSG_ENTER_CHOICE_12) : ${COLOR_RESET}"
+                tput setaf 3
+                read -r -e -p "" -i "1" CHOICE
+                tput sgr0
+                tput cuu 6
+                tput ed
+                case $CHOICE in
+                    1) DESKTOP_ENV="xfce" ;;
+                    2) DESKTOP_ENV="lxqt" ;;
+                    *) DESKTOP_ENV="xfce" ;;
+                esac
+            fi
+        fi
 
-                    # Sélection du navigateur (sauf pour la version minimale)
-                    if [ "$XFCE_VERSION" != "minimal" ]; then
-                        BROWSER_CHOICE=$(gum_choose "$(t MSG_SELECT_BROWSER)" --height=5 --selected="chromium" "chromium" "firefox" "none")
-                    fi
-                else
-                    return
+        # Save the desktop session choice
+        mkdir -p "$OHMYTERMUX_CONFIG_DIR"
+        echo "DESKTOP_SESSION=$DESKTOP_ENV" > "$OHMYTERMUX_CONFIG_DIR/desktop.conf"
+
+        case "$DESKTOP_ENV" in
+            xfce) _install_xfce ;;
+            lxqt) _install_lxqt ;;
+        esac
+    fi
+}
+
+_install_xfce() {
+    title_msg "$(t MSG_CONFIG_XFCE)"
+    local XFCE_VERSION="recommended"
+    local BROWSER_CHOICE="chromium"
+
+    if ! $FULL_INSTALL; then
+        if $USE_GUM; then
+            if gum_confirm "$(t MSG_CONFIRM_INSTALL_XFCE)"; then
+                XFCE_VERSION=$(gum_choose "$(t MSG_SELECT_XFCE_VERSION)" --height=5 --selected="recommended" \
+                "minimal" \
+                "recommended" \
+                "customized")
+
+                if [ "$XFCE_VERSION" != "minimal" ]; then
+                    BROWSER_CHOICE=$(gum_choose "$(t MSG_SELECT_BROWSER)" --height=5 --selected="chromium" "chromium" "firefox" "none")
                 fi
             else
-                printf "${COLOR_BLUE}$(t MSG_CONFIRM_INSTALL_XFCE) (O/n) : ${COLOR_RESET}"
-                read -r -e -p "" -i "o" CHOICE
-                if [[ "$CHOICE" =~ ^[oO]$ ]]; then
-                    echo -e "${COLOR_BLUE}$(t MSG_SELECT_XFCE_VERSION)${COLOR_RESET}"
+                return
+            fi
+        else
+            printf "${COLOR_BLUE}$(t MSG_CONFIRM_INSTALL_XFCE) (O/n) : ${COLOR_RESET}"
+            read -r -e -p "" -i "o" CHOICE
+            if [[ "$CHOICE" =~ ^[oO]$ ]]; then
+                echo -e "${COLOR_BLUE}$(t MSG_SELECT_XFCE_VERSION)${COLOR_RESET}"
+                echo
+                echo "$(t MSG_XFCE_MINIMAL)"
+                echo "$(t MSG_XFCE_RECOMMENDED)"
+                echo "$(t MSG_XFCE_CUSTOMIZED)"
+                echo
+                printf "${COLOR_GOLD}$(t MSG_ENTER_CHOICE_123) : ${COLOR_RESET}"
+                tput setaf 3
+                read -r -e -p "" -i "2" CHOICE
+                tput sgr0
+                tput cuu 7
+                tput ed
+                case $CHOICE in
+                    1) XFCE_VERSION="minimal" ;;
+                    2) XFCE_VERSION="recommended" ;;
+                    3) XFCE_VERSION="customized" ;;
+                    *) XFCE_VERSION="recommended" ;;
+                esac
+
+                if [ "$XFCE_VERSION" != "minimal" ]; then
+                    echo -e "${COLOR_BLUE}$(t MSG_SELECT_BROWSER)${COLOR_RESET}"
                     echo
-                    echo "$(t MSG_XFCE_MINIMAL)"
-                    echo "$(t MSG_XFCE_RECOMMENDED)"
-                    echo "$(t MSG_XFCE_CUSTOMIZED)"
+                    echo "$(t MSG_BROWSER_CHROMIUM)"
+                    echo "$(t MSG_BROWSER_FIREFOX)"
+                    echo "$(t MSG_BROWSER_NONE)"
                     echo
-                    printf "${COLOR_GOLD}$(t MSG_ENTER_CHOICE_123) : ${COLOR_RESET}"
+                    printf "${COLOR_GOLD}$(t MSG_ENTER_CHOICE_BROWSER) ${COLOR_RESET}"
                     tput setaf 3
-                    read -r -e -p "" -i "2" CHOICE
+                    read -r -e -p "" -i "1" CHOICE
                     tput sgr0
                     tput cuu 7
                     tput ed
                     case $CHOICE in
-                        1) XFCE_VERSION="minimal" ;;
-                        2) XFCE_VERSION="recommended" ;;
-                        3) XFCE_VERSION="customized" ;;
-                        *) XFCE_VERSION="recommended" ;;
+                        1) BROWSER_CHOICE="chromium" ;;
+                        2) BROWSER_CHOICE="firefox" ;;
+                        3) BROWSER_CHOICE="none" ;;
+                        *) BROWSER_CHOICE="chromium" ;;
                     esac
-
-                    if [ "$XFCE_VERSION" != "minimal" ]; then
-                        echo -e "${COLOR_BLUE}$(t MSG_SELECT_BROWSER)${COLOR_RESET}"
-                        echo
-                        echo "$(t MSG_BROWSER_CHROMIUM)"
-                        echo "$(t MSG_BROWSER_FIREFOX)"
-                        echo "$(t MSG_BROWSER_NONE)"
-                        echo
-                        printf "${COLOR_GOLD}$(t MSG_ENTER_CHOICE_BROWSER) ${COLOR_RESET}"
-                        tput setaf 3
-                        read -r -e -p "" -i "1" CHOICE
-                        tput sgr0
-                        tput cuu 7
-                        tput ed
-                        case $CHOICE in
-                            1) BROWSER_CHOICE="chromium" ;;
-                            2) BROWSER_CHOICE="firefox" ;;
-                            3) BROWSER_CHOICE="none" ;;
-                            *) BROWSER_CHOICE="chromium" ;;
-                        esac
-                    fi
-                else
-                    return
                 fi
+            else
+                return
             fi
         fi
+    fi
 
-        execute_command "pkg install ncurses-ui-libs && pkg uninstall dbus -y" "$(t MSG_INSTALL_DEPENDENCIES)"
+    execute_command "pkg install ncurses-ui-libs && pkg uninstall dbus -y" "$(t MSG_INSTALL_DEPENDENCIES)"
 
-        PACKAGES=('wget' 'x11-repo' 'tur-repo' 'pulseaudio')
+    PACKAGES=('wget' 'x11-repo' 'tur-repo' 'pulseaudio')
 
-        for PACKAGE in "${PACKAGES[@]}"; do
-            execute_command "pkg install -y $PACKAGE" "$(t MSG_INSTALLATION_OF) $PACKAGE"
-        done
+    for PACKAGE in "${PACKAGES[@]}"; do
+        execute_command "pkg install -y $PACKAGE" "$(t MSG_INSTALLATION_OF) $PACKAGE"
+    done
 
+    if $USE_GUM; then
+        download_and_execute "$OHMYTERMUX_REPO_URL/$BRANCH/xfce.sh" "XFCE" --gum --version="$XFCE_VERSION" --browser="$BROWSER_CHOICE"
+    else
+        download_and_execute "$OHMYTERMUX_REPO_URL/$BRANCH/xfce.sh" "XFCE" --version="$XFCE_VERSION" --browser="$BROWSER_CHOICE"
+    fi
+}
+
+_install_lxqt() {
+    title_msg "$(t MSG_CONFIG_LXQT)"
+    local LXQT_VERSION="recommended"
+    local BROWSER_CHOICE="chromium"
+
+    if ! $FULL_INSTALL; then
         if $USE_GUM; then
-            download_and_execute "$OHMYTERMUX_REPO_URL/$BRANCH/xfce.sh" "XFCE" --gum --version="$XFCE_VERSION" --browser="$BROWSER_CHOICE"
+            if gum_confirm "$(t MSG_CONFIRM_INSTALL_LXQT)"; then
+                LXQT_VERSION=$(gum_choose "$(t MSG_SELECT_LXQT_VERSION)" --height=4 --selected="recommended" \
+                "minimal" \
+                "recommended")
+
+                if [ "$LXQT_VERSION" != "minimal" ]; then
+                    BROWSER_CHOICE=$(gum_choose "$(t MSG_SELECT_BROWSER)" --height=5 --selected="chromium" "chromium" "firefox" "none")
+                fi
+            else
+                return
+            fi
         else
-            download_and_execute "$OHMYTERMUX_REPO_URL/$BRANCH/xfce.sh" "XFCE" --version="$XFCE_VERSION" --browser="$BROWSER_CHOICE"
+            printf "${COLOR_BLUE}$(t MSG_CONFIRM_INSTALL_LXQT) (O/n) : ${COLOR_RESET}"
+            read -r -e -p "" -i "o" CHOICE
+            if [[ "$CHOICE" =~ ^[oO]$ ]]; then
+                echo -e "${COLOR_BLUE}$(t MSG_SELECT_LXQT_VERSION)${COLOR_RESET}"
+                echo
+                echo "$(t MSG_LXQT_MINIMAL)"
+                echo "$(t MSG_LXQT_RECOMMENDED)"
+                echo
+                printf "${COLOR_GOLD}$(t MSG_ENTER_CHOICE_12) : ${COLOR_RESET}"
+                tput setaf 3
+                read -r -e -p "" -i "2" CHOICE
+                tput sgr0
+                tput cuu 5
+                tput ed
+                case $CHOICE in
+                    1) LXQT_VERSION="minimal" ;;
+                    2) LXQT_VERSION="recommended" ;;
+                    *) LXQT_VERSION="recommended" ;;
+                esac
+
+                if [ "$LXQT_VERSION" != "minimal" ]; then
+                    echo -e "${COLOR_BLUE}$(t MSG_SELECT_BROWSER)${COLOR_RESET}"
+                    echo
+                    echo "$(t MSG_BROWSER_CHROMIUM)"
+                    echo "$(t MSG_BROWSER_FIREFOX)"
+                    echo "$(t MSG_BROWSER_NONE)"
+                    echo
+                    printf "${COLOR_GOLD}$(t MSG_ENTER_CHOICE_BROWSER) ${COLOR_RESET}"
+                    tput setaf 3
+                    read -r -e -p "" -i "1" CHOICE
+                    tput sgr0
+                    tput cuu 7
+                    tput ed
+                    case $CHOICE in
+                        1) BROWSER_CHOICE="chromium" ;;
+                        2) BROWSER_CHOICE="firefox" ;;
+                        3) BROWSER_CHOICE="none" ;;
+                        *) BROWSER_CHOICE="chromium" ;;
+                    esac
+                fi
+            else
+                return
+            fi
         fi
+    fi
+
+    execute_command "pkg install ncurses-ui-libs && pkg uninstall dbus -y" "$(t MSG_INSTALL_DEPENDENCIES)"
+
+    PACKAGES=('wget' 'x11-repo' 'tur-repo' 'pulseaudio')
+
+    for PACKAGE in "${PACKAGES[@]}"; do
+        execute_command "pkg install -y $PACKAGE" "$(t MSG_INSTALLATION_OF) $PACKAGE"
+    done
+
+    if $USE_GUM; then
+        download_and_execute "$OHMYTERMUX_REPO_URL/$BRANCH/lxqt.sh" "LXQt" --gum --version="$LXQT_VERSION" --browser="$BROWSER_CHOICE"
+    else
+        download_and_execute "$OHMYTERMUX_REPO_URL/$BRANCH/lxqt.sh" "LXQt" --version="$LXQT_VERSION" --browser="$BROWSER_CHOICE"
     fi
 }
 
