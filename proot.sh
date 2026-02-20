@@ -4,7 +4,7 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # GitHub branch for downloads
-BRANCH="1.2.1"
+BRANCH="1.2.2"
 
 # Language override variable
 OVERRIDE_LANG=""
@@ -49,8 +49,15 @@ done
 #------------------------------------------------------------------------------
 _loader_url="https://raw.githubusercontent.com/devohmycode/OhMyTermux/$BRANCH/lib/i18n_loader.sh"
 mkdir -p "$SCRIPT_DIR/lib"
-if [ ! -f "$SCRIPT_DIR/lib/i18n_loader.sh" ]; then
-    curl -fL -s -o "$SCRIPT_DIR/lib/i18n_loader.sh" "$_loader_url" 2>/dev/null
+# Always try to refresh i18n_loader.sh; fall back to cached version if download fails
+_loader_tmp=$(mktemp 2>/dev/null || echo "$SCRIPT_DIR/lib/i18n_loader.sh.tmp")
+if curl -fL -s -o "$_loader_tmp" "$_loader_url" 2>/dev/null && head -1 "$_loader_tmp" 2>/dev/null | grep -q "^#!/bin/bash"; then
+    mv "$_loader_tmp" "$SCRIPT_DIR/lib/i18n_loader.sh"
+else
+    rm -f "$_loader_tmp" 2>/dev/null
+    if [ ! -f "$SCRIPT_DIR/lib/i18n_loader.sh" ]; then
+        echo "Warning: Could not download i18n_loader.sh and no cached version available" >&2
+    fi
 fi
 source "$SCRIPT_DIR/lib/i18n_loader.sh"
 
@@ -210,28 +217,20 @@ detect_gpu() {
 }
 
 #------------------------------------------------------------------------------
-# MESA-VULKAN INSTALLATION
+# GPU DETECTION, SAVE AND MESA-VULKAN INSTALLATION
 #------------------------------------------------------------------------------
 install_mesa_vulkan() {
     info_msg "$(t "MSG_PROOT_GPU_DETECTING")"
     detect_gpu
 
-    # Save GPU vendor for other scripts (utils.sh)
+    # Save GPU vendor for other scripts (zrun, zrunhud in utils.sh)
     mkdir -p "$OHMYTERMUX_CONFIG_DIR"
     echo "$GPU_VENDOR" > "$OHMYTERMUX_CONFIG_DIR/gpu_vendor"
 
     case "$GPU_VENDOR" in
         adreno)
             info_msg "$(printf "$(t "MSG_PROOT_GPU_DETECTED")" "$(t "MSG_PROOT_GPU_ADRENO")")"
-            local MESA_PACKAGE="mesa-vulkan-kgsl_24.1.0-devel-20240120_arm64.deb"
-            local MESA_URL="$OHMYTERMUX_REPO_URL/$BRANCH/src/$MESA_PACKAGE"
-
-            if ! proot-distro login debian --shared-tmp -- dpkg -s mesa-vulkan-kgsl &> /dev/null; then
-                execute_command "curl -fL -o $PREFIX/tmp/$MESA_PACKAGE $MESA_URL" "$(t "MSG_PROOT_MESA_DOWNLOAD")"
-                execute_command "proot-distro login debian --shared-tmp -- apt install -y /tmp/$MESA_PACKAGE" "$(t "MSG_PROOT_MESA_INSTALLATION")"
-            else
-                info_msg "$(t "MSG_PROOT_MESA_ALREADY_INSTALLED")"
-            fi
+            execute_command "proot-distro login debian --shared-tmp -- apt install -y mesa-vulkan-drivers" "$(t "MSG_PROOT_MESA_INSTALLATION")"
             ;;
         mali)
             info_msg "$(printf "$(t "MSG_PROOT_GPU_DETECTED")" "$(t "MSG_PROOT_GPU_MALI")")"
@@ -311,6 +310,11 @@ configure_themes_and_icons() {
         mkdir -p \"$PROOT_DEBIAN_ROOT/home/$USERNAME/.fonts/\"
         mkdir -p \"$PROOT_DEBIAN_ROOT/home/$USERNAME/.themes/\"
     " "$(t "MSG_PROOT_CREATING_DIRECTORIES")"
+
+    # Skip GTK themes for LXQt (uses Qt/Kvantum themes instead)
+    if [ "${DESKTOP_ENV}" = "lxqt" ]; then
+        INSTALL_THEME=false
+    fi
 
     # Copy themes if installed
     if [ "$INSTALL_THEME" = true ] && [ -n "$SELECTED_THEME" ]; then

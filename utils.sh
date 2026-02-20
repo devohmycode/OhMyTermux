@@ -4,7 +4,7 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # GitHub branch for downloads
-BRANCH="${BRANCH:-1.2.1}"
+BRANCH="${BRANCH:-1.2.2}"
 
 # Language override variable
 OVERRIDE_LANG=""
@@ -32,8 +32,15 @@ done
 # Bootstrap: load i18n and lib systems
 _loader_url="https://raw.githubusercontent.com/devohmycode/OhMyTermux/$BRANCH/lib/i18n_loader.sh"
 mkdir -p "$SCRIPT_DIR/lib"
-if [ ! -f "$SCRIPT_DIR/lib/i18n_loader.sh" ]; then
-    curl -fL -s -o "$SCRIPT_DIR/lib/i18n_loader.sh" "$_loader_url" 2>/dev/null
+# Always try to refresh i18n_loader.sh; fall back to cached version if download fails
+_loader_tmp=$(mktemp 2>/dev/null || echo "$SCRIPT_DIR/lib/i18n_loader.sh.tmp")
+if curl -fL -s -o "$_loader_tmp" "$_loader_url" 2>/dev/null && head -1 "$_loader_tmp" 2>/dev/null | grep -q "^#!/bin/bash"; then
+    mv "$_loader_tmp" "$SCRIPT_DIR/lib/i18n_loader.sh"
+else
+    rm -f "$_loader_tmp" 2>/dev/null
+    if [ ! -f "$SCRIPT_DIR/lib/i18n_loader.sh" ]; then
+        echo "Warning: Could not download i18n_loader.sh and no cached version available" >&2
+    fi
 fi
 I18N_SKIP_LIB=true
 source "$SCRIPT_DIR/lib/i18n_loader.sh"
@@ -125,7 +132,7 @@ if [[ $action == "$(t "MSG_CP2MENU_COPY_DESKTOP")" ]]; then
 
   cp "$selected_file" "$PREFIX/share/applications/"
   sed -i "s/^Exec=\(.*\)$/Exec=pd login debian --user $username --shared-tmp -- env DISPLAY=:1.0 \1/" "$PREFIX/share/applications/$desktop_filename"
-  
+
   zenity --info --text="$(t "MSG_CP2MENU_SUCCESS")" --title="$(t "MSG_CP2MENU_SUCCESS_TITLE")"
 elif [[ $action == "$(t "MSG_CP2MENU_DELETE_DESKTOP")" ]]; then
   selected_file=$(zenity --file-selection --title="$(t "MSG_CP2MENU_SELECT_DELETE")" --file-filter="*.desktop" --filename="$PREFIX/share/applications")
@@ -156,8 +163,8 @@ Categories=System;
 Path=
 Terminal=false
 StartupNotify=false
-" > $PREFIX/share/applications/cp2menu.desktop 
-chmod +x $PREFIX/share/applications/cp2menu.desktop 
+" > $PREFIX/share/applications/cp2menu.desktop
+chmod +x $PREFIX/share/applications/cp2menu.desktop
 
 #------------------------------------------------------------------------------
 # APP INSTALLER
@@ -168,7 +175,7 @@ cat <<'EOF' > "$PREFIX/bin/app-installer"
 
 # Define the installer directory
 INSTALLER_DIR="$HOME/.App-Installer"
-REPO_URL="https://github.com/GiGIDKR/OhMyAppInstaller.git"
+REPO_URL="https://github.com/devohmycode/App-Installer.git"
 DESKTOP_DIR="$HOME/Desktop"
 APP_DESKTOP_FILE="$DESKTOP_DIR/app-installer.desktop"
 
@@ -222,38 +229,129 @@ if [ ! -f "$HOME/Desktop/app-installer.desktop" ]; then
     StartupNotify=false
 " > "$HOME/Desktop/app-installer.desktop"
     chmod +x "$HOME/Desktop/app-installer.desktop"
-fi  
+fi
 
 #------------------------------------------------------------------------------
 # START SCRIPT
-# Start Termux-X11 and XFCE
+# Start Termux-X11 with XFCE or LXQt depending on the installed DE
 #------------------------------------------------------------------------------
 cat <<'EOF' > start
 #!/bin/bash
 
-# Enable PulseAudio on the network
-pulseaudio --start --load="module-native-protocol-tcp auth-ip-acl=127.0.0.1 auth-anonymous=1" --exit-idle-time=-1 > /dev/null 2>&1
+# ---------------------------------------------------------------------------
+# OhMyTermux - start
+# Démarre Termux-X11 avec XFCE ou LXQt selon l'environnement installé
+# ---------------------------------------------------------------------------
 
-XDG_RUNTIME_DIR=${TMPDIR} termux-x11 :1.0 & > /dev/null 2>&1
+# ---------------------------------------------------------------------------
+# NETTOYAGE DU SERVEUR X EXISTANT
+# ---------------------------------------------------------------------------
+pkill -f "termux.x11"    > /dev/null 2>&1
+pkill -f "Xwayland"      > /dev/null 2>&1
+pkill -f "xfce4-session" > /dev/null 2>&1
+pkill -f "lxqt-session"  > /dev/null 2>&1
+pkill -f "startlxqt"     > /dev/null 2>&1
+pkill -f "openbox"       > /dev/null 2>&1
 sleep 1
 
+# Supprimer les verrous X11 résiduels
+rm -f /tmp/.X1-lock > /dev/null 2>&1
+rm -f /tmp/.X11-unix/X1 > /dev/null 2>&1
+
+# ---------------------------------------------------------------------------
+# DÉTECTER L'ENVIRONNEMENT DE BUREAU
+# ---------------------------------------------------------------------------
+DESKTOP_SESSION="unknown"
+OHMYTERMUX_CONFIG="$HOME/.config/OhMyTermux"
+
+# 1. Lire depuis desktop.conf (priorité haute - écrit par install.sh / lxqt.sh)
+if [ -f "$OHMYTERMUX_CONFIG/desktop.conf" ]; then
+    source "$OHMYTERMUX_CONFIG/desktop.conf"
+fi
+
+# 2. Fallback : lire depuis theme_config.tmp (écrit par lxqt.sh)
+if [ "$DESKTOP_SESSION" = "unknown" ] || [ -z "$DESKTOP_SESSION" ]; then
+    if [ -f "$OHMYTERMUX_CONFIG/theme_config.tmp" ]; then
+        DETECTED=$(grep '^DESKTOP_ENV=' "$OHMYTERMUX_CONFIG/theme_config.tmp" | cut -d'=' -f2 | tr -d '"')
+        [ -n "$DETECTED" ] && DESKTOP_SESSION="$DETECTED"
+    fi
+fi
+
+# 3. Fallback final : détecter par la présence des binaires
+if [ "$DESKTOP_SESSION" = "unknown" ] || [ -z "$DESKTOP_SESSION" ]; then
+    if command -v startlxqt > /dev/null 2>&1 || command -v lxqt-session > /dev/null 2>&1; then
+        DESKTOP_SESSION="lxqt"
+    elif command -v xfce4-session > /dev/null 2>&1; then
+        DESKTOP_SESSION="xfce"
+    else
+        echo "[start] Aucun environnement de bureau détecté (xfce4-session ou startlxqt)."
+        exit 1
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# PULSEAUDIO
+# ---------------------------------------------------------------------------
+pulseaudio --start \
+    --load="module-native-protocol-tcp auth-ip-acl=127.0.0.1 auth-anonymous=1" \
+    --exit-idle-time=-1 > /dev/null 2>&1
+
+export PULSE_SERVER=127.0.0.1
+
+# ---------------------------------------------------------------------------
+# DÉMARRER TERMUX-X11
+# ---------------------------------------------------------------------------
+XDG_RUNTIME_DIR=${TMPDIR} termux-x11 :1.0 &> /dev/null &
+sleep 1
+
+# Ouvrir l'activité Termux-X11
 am start --user 0 -n com.termux.x11/com.termux.x11.MainActivity > /dev/null 2>&1
 sleep 1
 
-MESA_NO_ERROR=1 MESA_GL_VERSION_OVERRIDE=4.3COMPAT MESA_GLES_VERSION_OVERRIDE=3.2 virgl_test_server_android --angle-gl & > /dev/null 2>&1
+# ---------------------------------------------------------------------------
+# VIRGL (rendu GPU)
+# ---------------------------------------------------------------------------
+GPU_VENDOR="unknown"
+if [ -f "$OHMYTERMUX_CONFIG/gpu_vendor" ]; then
+    GPU_VENDOR=$(cat "$OHMYTERMUX_CONFIG/gpu_vendor")
+fi
 
-#GALLIUM_DRIVER=virpipe MESA_GL_VERSION_OVERRIDE=4.0 program
+if [ "$GPU_VENDOR" = "adreno" ]; then
+    MESA_NO_ERROR=1 MESA_GL_VERSION_OVERRIDE=4.3COMPAT MESA_GLES_VERSION_OVERRIDE=3.2 \
+        virgl_test_server_android --angle-gl &> /dev/null &
+else
+    MESA_NO_ERROR=1 MESA_GL_VERSION_OVERRIDE=4.3COMPAT MESA_GLES_VERSION_OVERRIDE=3.2 \
+        virgl_test_server_android &> /dev/null &
+fi
+sleep 1
 
-#MESA_LOADER_DRIVER_OVERRIDE=zink TU_DEBUG=noconform program
+# ---------------------------------------------------------------------------
+# DÉMARRER LA SESSION DE BUREAU
+# ---------------------------------------------------------------------------
+export DISPLAY=:1.0
+export GALLIUM_DRIVER=virpipe
 
-env DISPLAY=:1.0 GALLIUM_DRIVER=virpipe dbus-launch --exit-with-session xfce4-session & > /dev/null 2>&1
-
-# Set the audio server
-export PULSE_SERVER=127.0.0.1 > /dev/null 2>&1
-
-sleep 5
-process_id=$(ps -aux | grep '[x]fce4-screensaver' | awk '{print $2}')
-kill "$process_id" > /dev/null 2>&1
+case "$DESKTOP_SESSION" in
+    lxqt)
+        env DISPLAY=:1.0 GALLIUM_DRIVER=virpipe \
+            dbus-launch --exit-with-session startlxqt &> /dev/null &
+        sleep 5
+        process_id=$(ps -aux | grep '[x]screensaver' | awk '{print $2}')
+        [ -n "$process_id" ] && kill "$process_id" > /dev/null 2>&1
+        ;;
+    xfce)
+        env DISPLAY=:1.0 GALLIUM_DRIVER=virpipe \
+            dbus-launch --exit-with-session xfce4-session &> /dev/null &
+        sleep 5
+        process_id=$(ps -aux | grep '[x]fce4-screensaver' | awk '{print $2}')
+        [ -n "$process_id" ] && kill "$process_id" > /dev/null 2>&1
+        ;;
+    *)
+        echo "[start] Environnement de bureau non reconnu : $DESKTOP_SESSION"
+        echo "        Valeurs acceptées : xfce, lxqt"
+        exit 1
+        ;;
+esac
 
 
 EOF
@@ -267,16 +365,19 @@ mv start $PREFIX/bin
 #------------------------------------------------------------------------------
 cat <<'EOF' > $PREFIX/bin/kill_termux_x11
 #!/bin/bash
-  
+
 # Check if processes are running in Termux or Proot
 if pgrep -f 'apt|apt-get|dpkg|nala' > /dev/null; then
   zenity --info --text="$(t "MSG_KILL_X11_SOFTWARE_RUNNING")"
   exit 1
 fi
 
-# Get the process IDs of the Termux-X11 and XFCE sessions
+# Get the process IDs of Termux-X11, XFCE and LXQt sessions
 termux_x11_pid=$(pgrep -f /system/bin/app_process.*com.termux.x11.Loader)
 xfce_pid=$(pgrep -f "xfce4-session")
+lxqt_pid=$(pgrep -f "lxqt-session")
+openbox_pid=$(pgrep -f "openbox")
+virgl_pid=$(pgrep -f "virgl_test_server")
 
 # Stop the processes only if they exist
 if [ -n "$termux_x11_pid" ]; then
@@ -287,8 +388,24 @@ if [ -n "$xfce_pid" ]; then
   kill -9 "$xfce_pid" 2>/dev/null
 fi
 
+if [ -n "$lxqt_pid" ]; then
+  kill -9 "$lxqt_pid" 2>/dev/null
+fi
+
+if [ -n "$openbox_pid" ]; then
+  kill -9 "$openbox_pid" 2>/dev/null
+fi
+
+if [ -n "$virgl_pid" ]; then
+  kill -9 "$virgl_pid" 2>/dev/null
+fi
+
+# Nettoyer les verrous X11 résiduels
+rm -f /tmp/.X1-lock 2>/dev/null
+rm -f /tmp/.X11-unix/X1 2>/dev/null
+
 # Show a dynamic message
-if [ -n "$termux_x11_pid" ] || [ -n "$xfce_pid" ]; then
+if [ -n "$termux_x11_pid" ] || [ -n "$xfce_pid" ] || [ -n "$lxqt_pid" ]; then
   zenity --info --text="$(t "MSG_KILL_X11_SESSIONS_CLOSED")"
 else
   zenity --info --text="$(t "MSG_KILL_X11_NOT_FOUND")"
