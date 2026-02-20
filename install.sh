@@ -538,14 +538,18 @@ download_and_execute() {
     shift 2
     local EXEC_ARGS="$@"
 
-    # Check if the file already exists and delete it
-    [ -f "$SCRIPT_NAME" ] && rm "$SCRIPT_NAME"
+    # Use local file if available in SCRIPT_DIR, otherwise download
+    if [ -f "$SCRIPT_DIR/$SCRIPT_NAME" ] && head -1 "$SCRIPT_DIR/$SCRIPT_NAME" 2>/dev/null | grep -q "^#!/bin/bash"; then
+        cp "$SCRIPT_DIR/$SCRIPT_NAME" "$SCRIPT_NAME"
+    else
+        # Check if the file already exists and delete it
+        [ -f "$SCRIPT_NAME" ] && rm "$SCRIPT_NAME"
 
-    # Download with curl in silent mode but with progress bar
-    #if ! curl -L --progress-bar -o "$SCRIPT_NAME" "$URL"; then
-    if ! curl -L -o "$SCRIPT_NAME" "$URL" 2>/dev/null; then
-        error_msg "$(t MSG_ERROR_DOWNLOAD_SCRIPT) $DESCRIPTION"
-        return 1
+        # Download with curl in silent mode
+        if ! curl -fL -o "$SCRIPT_NAME" "$URL" 2>/dev/null; then
+            error_msg "$(t MSG_ERROR_DOWNLOAD_SCRIPT) $DESCRIPTION"
+            return 1
+        fi
     fi
 
     # Check if the file has been downloaded
