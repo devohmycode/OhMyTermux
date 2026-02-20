@@ -1963,7 +1963,7 @@ _install_lxqt() {
                 tput setaf 3
                 read -r -e -p "" -i "2" CHOICE
                 tput sgr0
-                tput cuu 5
+                tput cuu 6
                 tput ed
                 case $CHOICE in
                     1) LXQT_VERSION="minimal" ;;
@@ -2080,7 +2080,7 @@ EOF
 #!/bin/bash
 
 # Read desktop configuration
-CONFIG_FILE="\$HOME/.config/ohmytermux/desktop.conf"
+CONFIG_FILE="$OHMYTERMUX_CONFIG_DIR/desktop.conf"
 DESKTOP_SESSION="xfce"
 [ -f "\$CONFIG_FILE" ] && source "\$CONFIG_FILE"
 
