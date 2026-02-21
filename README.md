@@ -4,7 +4,7 @@
 
 ### **From selecting a shell to applying a cursor pack to performing stylish clicks in a complete Debian development environment that fits in your pocket  : dozens of parameters are available in [OhMyTermux](https://github.com/devohmycode/OhMyTermux).**
 
-![Version](https://img.shields.io/badge/version-1.1.0-magenta) ![GitHub last commit](https://img.shields.io/github/last-commit/devohmycode/OhMyTermux?style=flat&color=green&link=https%3A%2F%2Fgithub.com%2FGiGiDKR%2FOhMyTermux) ![GitHub repo file or directory count](https://img.shields.io/github/directory-file-count/devohmycode/OhMyTermux)  ![GitHub code size in bytes](https://img.shields.io/github/languages/code-size/devohmycode/OhMyTermux) ![GitHub repo size](https://img.shields.io/github/repo-size/devohmycode/OhMyTermux)
+![Version](https://img.shields.io/badge/version-1.2.2-magenta) ![GitHub last commit](https://img.shields.io/github/last-commit/devohmycode/OhMyTermux?style=flat&color=green&link=https%3A%2F%2Fgithub.com%2FGiGiDKR%2FOhMyTermux) ![GitHub repo file or directory count](https://img.shields.io/github/directory-file-count/devohmycode/OhMyTermux)  ![GitHub code size in bytes](https://img.shields.io/github/languages/code-size/devohmycode/OhMyTermux) ![GitHub repo size](https://img.shields.io/github/repo-size/devohmycode/OhMyTermux)
 ![GitHub Repo stars](https://img.shields.io/github/stars/devohmycode/OhMyTermux?style=flat&color=gold) ![GitHub forks](https://img.shields.io/github/forks/devohmycode/OhMyTermux?style=flat&color=gold)
 
 ## Installation
