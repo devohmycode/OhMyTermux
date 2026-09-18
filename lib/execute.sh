@@ -11,8 +11,13 @@ execute_command() {
 
     if $USE_GUM; then
         if gum spin --spinner.foreground="33" --title.foreground="33" --spinner dot --title "$INFO_MSG" -- bash -c "$COMMAND $REDIRECT"; then
+            # Drop the terminal query replies gum left behind before printing
+            flush_terminal_input
+            clear_terminal_line
             gum style "$SUCCESS_MSG" --foreground 82
         else
+            flush_terminal_input
+            clear_terminal_line
             ERROR_DETAILS="Command: $COMMAND, Redirect: $REDIRECT, Time: $(date +'%d/%m/%Y %H:%M:%S')"
             gum style "$ERROR_MSG" --foreground 196
             log_error "$ERROR_DETAILS"

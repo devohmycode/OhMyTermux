@@ -42,6 +42,37 @@ if ! type -P tput &>/dev/null; then
 fi
 
 #------------------------------------------------------------------------------
+# TERMINAL QUERY REPLIES
+#------------------------------------------------------------------------------
+# gum probes the terminal for synchronized output (mode 2026) and grapheme
+# clustering (mode 2027). A terminal that supports DECRQM answers on stdin, but
+# `gum spin` usually exits before reading the reply: the bytes are echoed as
+# ^[[?2026;2$y on the line that follows and stay queued, where they would be
+# picked up by the next read. The Termux terminal stays silent, so this only
+# shows up under terminals that implement DECRQM (Docker images, desktop hosts).
+
+# Discard input already waiting in the terminal queue
+flush_terminal_input() {
+    [ -t 0 ] || return 0
+    local _discard _guard=0
+    # read -t 0 reports pending input without consuming any of it
+    while read -r -s -t 0 _discard 2>/dev/null; do
+        read -r -s -t 0.05 -n 4096 _discard 2>/dev/null
+        _guard=$((_guard + 1))
+        [ "$_guard" -ge 10 ] && break
+    done
+    return 0
+}
+
+# Erase the current line, removing anything the terminal echoed onto it
+clear_terminal_line() {
+    [ -t 1 ] || return 0
+    printf '\r'
+    tput el 2>/dev/null
+    return 0
+}
+
+#------------------------------------------------------------------------------
 # REDIRECTION
 #------------------------------------------------------------------------------
 if [ "$VERBOSE" = true ]; then
