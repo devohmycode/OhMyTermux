@@ -10,7 +10,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # GLOBAL VARIABLES
 #------------------------------------------------------------------------------
 # GitHub branch for downloads
-BRANCH="1.2.2"
+BRANCH="main"
 
 # Interactive interface with gum
 USE_GUM=false
@@ -2443,13 +2443,16 @@ EOL
 show_banner
 
 # Checking and installing the necessary dependencies
-if ! command -v tput &> /dev/null; then
+# type -P ignores the ANSI fallback function defined in lib/colors.sh
+if ! type -P tput &> /dev/null; then
     if $USE_GUM; then
         execute_command "pkg install -y ncurses-utils" "Installation of the dependencies"
     else
         info_msg "Installation of the dependencies"
         pkg install -y ncurses-utils >/dev/null 2>&1
     fi
+    # Drop the fallback as soon as the real binary is available
+    type -P tput &> /dev/null && unset -f tput
 fi
 
 # Checking if specific arguments have been provided

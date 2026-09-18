@@ -7,7 +7,7 @@
 # Les messages sont organisés par catégorie pour une meilleure maintenabilité.
 # =============================================================================
 
-# Version identifier - used to detect stale cached message files
+# Content version marker - must match I18N_EXPECTED_VERSION in lib/i18n_loader.sh
 MSG_I18N_VERSION="1.2.2"
 
 # Messages généraux

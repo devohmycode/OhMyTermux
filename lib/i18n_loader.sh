@@ -17,12 +17,41 @@
 #   OVERRIDE_LANG    - Language override (e.g., "fr")
 #   I18N_DEFER_INIT  - If "true", skip init_i18n() call (caller handles it)
 #   I18N_SKIP_LIB    - If "true", skip loading lib/common.sh
+#   VERBOSE          - If "true", show bootstrap progress messages
 #------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+# Expected version of the i18n message files
+#------------------------------------------------------------------------------
+# Bump this whenever i18n/messages/*.sh change, and set MSG_I18N_VERSION to the
+# same value in en.sh and fr.sh. Cached copies carrying any other value are
+# re-downloaded. This is a content marker, not a branch name: BRANCH tracks a
+# rolling branch and no longer changes when the messages do.
+I18N_EXPECTED_VERSION="${I18N_EXPECTED_VERSION:-1.2.2}"
 
 #------------------------------------------------------------------------------
 # Script validation function
 #------------------------------------------------------------------------------
 _validate_script() { head -1 "$1" 2>/dev/null | grep -q "^#!/bin/bash"; }
+
+#------------------------------------------------------------------------------
+# Progress messages: silent unless verbose mode is requested
+#------------------------------------------------------------------------------
+# The caller's arguments are still visible here because this file is sourced
+# without arguments, and arguments are parsed later in the calling script.
+_i18n_verbose=false
+if [ "$VERBOSE" = "true" ] || [ "$OHMYTERMUX_VERBOSE" = "true" ]; then
+    _i18n_verbose=true
+else
+    for _arg in "$@"; do
+        case "$_arg" in
+            --verbose|-v) _i18n_verbose=true; break ;;
+        esac
+    done
+    unset _arg
+fi
+
+_i18n_info() { [ "$_i18n_verbose" = "true" ] && echo "$1" >&2; return 0; }
 
 #------------------------------------------------------------------------------
 # Download and load bootstrap.sh
@@ -43,9 +72,9 @@ source "$SCRIPT_DIR/lib/bootstrap.sh"
 # Download and load i18n system
 #------------------------------------------------------------------------------
 if [ ! -f "$SCRIPT_DIR/i18n/i18n.sh" ] || ! _validate_script "$SCRIPT_DIR/i18n/i18n.sh"; then
-    echo "Initializing i18n system..." >&2
+    _i18n_info "Initializing i18n system..."
     if download_i18n_system && _validate_script "$SCRIPT_DIR/i18n/i18n.sh"; then
-        echo "i18n system downloaded and loaded successfully." >&2
+        _i18n_info "i18n system downloaded and loaded successfully."
     else
         echo "Error: Could not download i18n system. Using fallback messages." >&2
         t() {
@@ -61,33 +90,52 @@ fi
 
 #------------------------------------------------------------------------------
 # Refresh message files if they are outdated (version mismatch)
-# MSG_I18N_VERSION must match BRANCH; if not, re-download en.sh and fr.sh
 #------------------------------------------------------------------------------
+# MSG_I18N_VERSION in each message file must match I18N_EXPECTED_VERSION; if not,
+# en.sh and fr.sh are re-downloaded from BRANCH. The marker is deliberately
+# independent of BRANCH, which tracks a rolling branch and therefore no longer
+# signals that message content changed.
+_message_file_version() {
+    grep '^MSG_I18N_VERSION=' "$1" 2>/dev/null | head -1 | cut -d'"' -f2
+}
+
 _check_and_refresh_messages() {
-    local _expected_version="${BRANCH}"
-    local _en_file="$SCRIPT_DIR/i18n/messages/en.sh"
     local _needs_refresh=false
+    local _lang _file _version
 
-    # If message files don't exist, refresh is needed
-    if [ ! -f "$_en_file" ]; then
-        _needs_refresh=true
-    else
-        # Source only the version variable to check it without polluting the env
-        local _current_version
-        _current_version=$(grep '^MSG_I18N_VERSION=' "$_en_file" 2>/dev/null | head -1 | cut -d'"' -f2)
-        if [ -z "$_current_version" ] || [ "$_current_version" != "$_expected_version" ]; then
+    for _lang in en fr; do
+        _file="$SCRIPT_DIR/i18n/messages/${_lang}.sh"
+        # A missing file always needs a refresh
+        if [ ! -f "$_file" ]; then
             _needs_refresh=true
+            break
         fi
-    fi
+        _version=$(_message_file_version "$_file")
+        if [ -z "$_version" ] || [ "$_version" != "$I18N_EXPECTED_VERSION" ]; then
+            _needs_refresh=true
+            break
+        fi
+    done
 
-    if [ "$_needs_refresh" = "true" ]; then
-        mkdir -p "$SCRIPT_DIR/i18n/messages"
-        local _base_url="${_BOOTSTRAP_BASE_URL:-https://raw.githubusercontent.com/devohmycode/OhMyTermux/$BRANCH}"
-        for _lang in en fr; do
-            curl -fL -s -o "$SCRIPT_DIR/i18n/messages/${_lang}.sh" \
-                "$_base_url/i18n/messages/${_lang}.sh" 2>/dev/null || true
-        done
-    fi
+    [ "$_needs_refresh" = "true" ] || return 0
+
+    _i18n_info "Refreshing i18n messages (expected version: $I18N_EXPECTED_VERSION)..."
+    mkdir -p "$SCRIPT_DIR/i18n/messages"
+    local _base_url="${_BOOTSTRAP_BASE_URL:-https://raw.githubusercontent.com/devohmycode/OhMyTermux/$BRANCH}"
+    local _tmp
+    for _lang in en fr; do
+        _file="$SCRIPT_DIR/i18n/messages/${_lang}.sh"
+        _tmp=$(mktemp 2>/dev/null || echo "${_file}.tmp")
+        # Download to a temporary file so a failed fetch never destroys a
+        # working copy of the messages
+        if curl -fL -s -o "$_tmp" "$_base_url/i18n/messages/${_lang}.sh" 2>/dev/null \
+            && _validate_script "$_tmp"; then
+            mv "$_tmp" "$_file"
+        else
+            rm -f "$_tmp" 2>/dev/null
+            _i18n_info "Warning: could not refresh i18n/messages/${_lang}.sh, keeping the local copy."
+        fi
+    done
 }
 
 if [ "${MESSAGES_LOADED}" != "fallback" ]; then
