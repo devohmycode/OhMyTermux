@@ -7,8 +7,8 @@
 # Messages are organized by category for better maintainability.
 # =============================================================================
 
-# Content version marker - must match I18N_EXPECTED_VERSION in lib/i18n_loader.sh
-MSG_I18N_VERSION="1.2.2"
+# Content version marker - must match OHMYTERMUX_CACHE_VERSION in lib/i18n_loader.sh
+MSG_I18N_VERSION="1.2.3"
 
 # General messages
 MSG_WELCOME="Welcome to OhMyTermux"

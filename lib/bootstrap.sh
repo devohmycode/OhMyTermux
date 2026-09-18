@@ -50,13 +50,21 @@ _download_files() {
         local URL="$_BOOTSTRAP_BASE_URL/$FILE"
         local LOCAL_PATH="$BASE_DIR/$FILE"
         local LOCAL_DIR=$(dirname "$LOCAL_PATH")
+        local TMP_PATH
 
         mkdir -p "$LOCAL_DIR"
 
-        if ! curl -fL -s -o "$LOCAL_PATH" "$URL" 2>/dev/null; then
+        # Download to a temporary file, then move it into place. A failed
+        # download therefore leaves the existing copy untouched, and the move
+        # replaces the file rather than rewriting it: a script currently being
+        # sourced keeps reading the copy it started with.
+        TMP_PATH=$(mktemp 2>/dev/null || echo "${LOCAL_PATH}.tmp")
+        if ! curl -fL -s -o "$TMP_PATH" "$URL" 2>/dev/null || [ ! -s "$TMP_PATH" ]; then
+            rm -f "$TMP_PATH" 2>/dev/null
             echo "Warning: Could not download $FILE from $URL" >&2
             return 1
         fi
+        mv "$TMP_PATH" "$LOCAL_PATH"
     done
 
     return 0
