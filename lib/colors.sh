@@ -6,6 +6,7 @@ COLOR_BLUE='\033[38;5;33m'    # Information
 COLOR_GREEN='\033[38;5;82m'   # Success
 COLOR_GOLD='\033[38;5;220m'   # Warning
 COLOR_RED='\033[38;5;196m'    # Error
+COLOR_INPUT='\033[38;5;3m'    # User input (equivalent to tput setaf 3)
 COLOR_RESET='\033[0m'         # Reset
 
 #------------------------------------------------------------------------------
@@ -40,6 +41,28 @@ if ! type -P tput &>/dev/null; then
         esac
     }
 fi
+
+#------------------------------------------------------------------------------
+# READLINE PROMPT
+#------------------------------------------------------------------------------
+# Builds the prompt for `read -e -p`. The prompt must be passed to read itself:
+# printing it beforehand leaves readline believing the line starts at column 0,
+# so editing the pre-filled answer redraws over the question and erases it.
+# Color sequences are wrapped in \001 and \002 (RL_PROMPT_START_IGNORE and
+# RL_PROMPT_END_IGNORE) so readline excludes them from the prompt width.
+#
+# The third argument is the color the typed answer takes; it defaults to a
+# reset. Passing it here rather than running tput before read is what keeps the
+# color applied, since the prompt is emitted after any such command.
+#
+# Usage: read -r -e -p "$(rl_prompt "$COLOR_BLUE" "Question ? (O/n) : ")" -i "o" CHOICE
+#        read -r -e -p "$(rl_prompt "$COLOR_GOLD" "Choice: " "$COLOR_INPUT")" -i "1" CHOICE
+rl_prompt() {
+    local COLOR="$1"
+    local TEXT="$2"
+    local INPUT_COLOR="${3:-$COLOR_RESET}"
+    printf '\001%b\002%s\001%b\002' "$COLOR" "$TEXT" "$INPUT_COLOR"
+}
 
 #------------------------------------------------------------------------------
 # TERMINAL QUERY REPLIES

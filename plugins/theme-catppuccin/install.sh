@@ -20,9 +20,7 @@ install_catppuccin() {
         echo -e "${COLOR_BLUE}3) Frappe $(t MSG_CATPPUCCIN_FRAPPE_DESC)${COLOR_RESET}"
         echo -e "${COLOR_BLUE}4) Macchiato $(t MSG_CATPPUCCIN_MACCHIATO_DESC)${COLOR_RESET}"
         echo
-        printf "${COLOR_GOLD}$(t MSG_ENTER_CHOICE_123) ${COLOR_RESET}"
-        tput setaf 3
-        read -r -e -p "" -i "1" CHOICE
+        read -r -e -p "$(rl_prompt "${COLOR_GOLD}" "$(t MSG_ENTER_CHOICE_123) " "${COLOR_INPUT}")" -i "1" CHOICE
         tput sgr0
         tput cuu 8
         tput ed

@@ -595,8 +595,7 @@ change_repo() {
             termux-change-repo
         fi
     else
-        printf "${COLOR_BLUE}$(t MSG_CONFIRM_CHANGE_REPO) (O/n) : ${COLOR_RESET}"
-        read -r -e -p "" -i "o" CHOICE
+        read -r -e -p "$(rl_prompt "${COLOR_BLUE}" "$(t MSG_CONFIRM_CHANGE_REPO) (O/n) : ")" -i "o" CHOICE
         [[ "$CHOICE" =~ ^[oO]$ ]] && termux-change-repo
     fi
 }
@@ -612,8 +611,7 @@ setup_storage() {
                 termux-setup-storage
             fi
         else
-            printf "${COLOR_BLUE}$(t MSG_CONFIRM_ALLOW_STORAGE) (O/n) : ${COLOR_RESET}"
-            read -r -e -p "" -i "n" CHOICE
+            read -r -e -p "$(rl_prompt "${COLOR_BLUE}" "$(t MSG_CONFIRM_ALLOW_STORAGE) (O/n) : ")" -i "n" CHOICE
             [[ "$CHOICE" =~ ^[oO]$ ]] && termux-setup-storage
         fi
     fi
@@ -717,8 +715,7 @@ initial_config() {
         fi
     else
         show_banner
-        printf "${COLOR_BLUE}$(t MSG_CONFIRM_ACTIVATE_CONFIG) (O/n) : ${COLOR_RESET}"
-        read -r -e -p "" -i "o" CHOICE
+        read -r -e -p "$(rl_prompt "${COLOR_BLUE}" "$(t MSG_CONFIRM_ACTIVATE_CONFIG) (O/n) : ")" -i "o" CHOICE
         # Clear the previous line
         tput cuu1  # Move up one line
         tput el    # Clear to the end of the line
@@ -741,9 +738,7 @@ install_shell() {
             echo -e "${COLOR_BLUE}$(t MSG_ZSH_OPTION)${COLOR_RESET}"
             echo -e "${COLOR_BLUE}$(t MSG_FISH_OPTION)${COLOR_RESET}"
             echo
-            printf "${COLOR_GOLD}$(t MSG_ENTER_SHELL_CHOICE) ${COLOR_RESET}"
-            tput setaf 3
-            read -r -e -p "" -i "2" CHOICE
+            read -r -e -p "$(rl_prompt "${COLOR_GOLD}" "$(t MSG_ENTER_SHELL_CHOICE) " "${COLOR_INPUT}")" -i "2" CHOICE
             tput sgr0
 
             # Clear the selection menu
@@ -779,8 +774,7 @@ install_shell() {
                             cp "$HOME/.oh-my-zsh/templates/zshrc.zsh-template" "$ZSHRC"
                         fi
                     else
-                        printf "${COLOR_BLUE}$(t MSG_CONFIRM_INSTALL_OHMYZSH) (O/n) : ${COLOR_RESET}"
-                        read -r -e -p "" -i "o" CHOICE
+                        read -r -e -p "$(rl_prompt "${COLOR_BLUE}" "$(t MSG_CONFIRM_INSTALL_OHMYZSH) (O/n) : ")" -i "o" CHOICE
                         tput cuu1
                         tput el
                         if [[ "$CHOICE" =~ ^[oO]$ ]]; then
@@ -833,9 +827,7 @@ install_prompt() {
             echo -e "${COLOR_BLUE}$(t MSG_OHMYPOSH_OPTION_BASH)${COLOR_RESET}"
             echo -e "${COLOR_BLUE}$(t MSG_STARSHIP_OPTION_BASH)${COLOR_RESET}"
             echo
-            printf "${COLOR_GOLD}$(t MSG_ENTER_PROMPT_CHOICE_BASH) ${COLOR_RESET}"
-            tput setaf 3
-            read -r -e -p "" -i "1" CHOICE
+            read -r -e -p "$(rl_prompt "${COLOR_GOLD}" "$(t MSG_ENTER_PROMPT_CHOICE_BASH) " "${COLOR_INPUT}")" -i "1" CHOICE
             tput sgr0
             tput cuu 5
             tput ed
@@ -856,9 +848,7 @@ install_prompt() {
             echo -e "${COLOR_BLUE}$(t MSG_OHMYPOSH_OPTION)${COLOR_RESET}"
             echo -e "${COLOR_BLUE}$(t MSG_STARSHIP_OPTION)${COLOR_RESET}"
             echo
-            printf "${COLOR_GOLD}$(t MSG_ENTER_PROMPT_CHOICE) ${COLOR_RESET}"
-            tput setaf 3
-            read -r -e -p "" -i "1" CHOICE
+            read -r -e -p "$(rl_prompt "${COLOR_GOLD}" "$(t MSG_ENTER_PROMPT_CHOICE) " "${COLOR_INPUT}")" -i "1" CHOICE
             tput sgr0
             tput cuu 7
             tput ed
@@ -888,16 +878,14 @@ install_prompt() {
                     fi
                 fi
             else
-                printf "${COLOR_BLUE}$(t MSG_CONFIRM_POWERLEVEL10K) (O/n) : ${COLOR_RESET}"
-                read -r -e -p "" -i "o" CHOICE
+                read -r -e -p "$(rl_prompt "${COLOR_BLUE}" "$(t MSG_CONFIRM_POWERLEVEL10K) (O/n) : ")" -i "o" CHOICE
                 tput cuu1
                 tput el
                 if [[ "$CHOICE" =~ ^[oO]$ ]]; then
                     execute_command "git clone --depth=1 https://github.com/romkatv/powerlevel10k.git \"$HOME/.oh-my-zsh/custom/themes/powerlevel10k\" > /dev/null 2>&1 || true" "$(t MSG_INSTALL_POWERLEVEL10K_PROGRESS)"
                     sed -i 's/ZSH_THEME="robbyrussell"/ZSH_THEME="powerlevel10k\/powerlevel10k"/' "$ZSHRC"
 
-                    printf "${COLOR_BLUE}$(t MSG_CONFIRM_INSTALL_CUSTOM_PROMPT) (O/n) : ${COLOR_RESET}"
-                    read -r -e -p "" -i "o" CHOICE
+                    read -r -e -p "$(rl_prompt "${COLOR_BLUE}" "$(t MSG_CONFIRM_INSTALL_CUSTOM_PROMPT) (O/n) : ")" -i "o" CHOICE
                     tput cuu1
                     tput el
                     if [[ "$CHOICE" =~ ^[oO]$ ]]; then
@@ -950,9 +938,7 @@ install_prompt() {
                 echo
                 # Calculating the number of lines to clear (number of themes + 3 lines for additional text)
                 LINES_TO_CLEAR=$((${#AVAILABLE_THEMES[@]}+3))
-                printf "${COLOR_GOLD}$(t MSG_ENTER_CHOICE_123) ${COLOR_RESET}"
-                tput setaf 3
-                read -r -e -p "" -i "1" CHOICE
+                read -r -e -p "$(rl_prompt "${COLOR_GOLD}" "$(t MSG_ENTER_CHOICE_123) " "${COLOR_INPUT}")" -i "1" CHOICE
                 tput sgr0
                 # Clearing the menu
                 tput cuu $LINES_TO_CLEAR
@@ -1036,9 +1022,7 @@ EOF
                 echo -e "${COLOR_BLUE}13) $(t PRESET_RICE)${COLOR_RESET}"
                 echo -e "${COLOR_BLUE}14) $(t PRESET_SOLARIZED)${COLOR_RESET}"
                 echo
-                printf "${COLOR_GOLD}$(t MSG_ENTER_CHOICE_123) ${COLOR_RESET}"
-                tput setaf 3
-                read -r -e -p "" -i "1" CHOICE
+                read -r -e -p "$(rl_prompt "${COLOR_GOLD}" "$(t MSG_ENTER_CHOICE_123) " "${COLOR_INPUT}")" -i "1" CHOICE
                 tput sgr0
                 tput cuu 18
                 tput ed
@@ -1205,9 +1189,7 @@ install_zsh_plugins() {
         info_msg "$(t MSG_PLUGIN_5)"
         info_msg "$(t MSG_PLUGIN_6)"
         echo
-        printf "${COLOR_GOLD}$(t MSG_ENTER_PLUGIN_NUMBERS_INPUT) ${COLOR_RESET}"
-        tput setaf 3
-        read -r -e -p "" -i "6" PLUGIN_CHOICES
+        read -r -e -p "$(rl_prompt "${COLOR_GOLD}" "$(t MSG_ENTER_PLUGIN_NUMBERS_INPUT) " "${COLOR_INPUT}")" -i "6" PLUGIN_CHOICES
         tput sgr0
         tput cuu 10
         tput ed
@@ -1506,9 +1488,7 @@ install_packages() {
                     echo -e "${COLOR_BLUE}${idx}) $(t MSG_PRESET_CUSTOM_SELECTION "Custom selection")${COLOR_RESET}"
                     echo
                     local TOTAL_OPTIONS=$idx
-                    printf "${COLOR_GOLD}$(t MSG_ENTER_CHOICE_123 "Enter your choice:") ${COLOR_RESET}"
-                    tput setaf 3
-                    read -r -e -p "" -i "$TOTAL_OPTIONS" PRESET_CHOICE
+                    read -r -e -p "$(rl_prompt "${COLOR_GOLD}" "$(t MSG_ENTER_CHOICE_123 "Enter your choice:" "${COLOR_INPUT}") ")" -i "$TOTAL_OPTIONS" PRESET_CHOICE
                     tput sgr0
                     # Clear the preset menu
                     tput cuu $((TOTAL_OPTIONS + 3))
@@ -1529,9 +1509,7 @@ install_packages() {
                 # Show preset packages and ask for confirmation or editing
                 echo -e "${COLOR_BLUE}$(t MSG_PRESET_PACKAGES) ${PRESET_PKG_LIST[*]}${COLOR_RESET}"
                 echo
-                printf "${COLOR_GOLD}$(t MSG_PRESET_CONFIRM_SELECTION) ${COLOR_RESET}"
-                tput setaf 3
-                read -r -e -p "" -i "Y" CONFIRM_CHOICE
+                read -r -e -p "$(rl_prompt "${COLOR_GOLD}" "$(t MSG_PRESET_CONFIRM_SELECTION) " "${COLOR_INPUT}")" -i "Y" CONFIRM_CHOICE
                 tput sgr0
                 tput cuu 3
                 tput ed
@@ -1572,9 +1550,7 @@ install_packages() {
                 echo -e "${COLOR_BLUE}21) make${COLOR_RESET}"
                 echo "22) $(t MSG_ALL_INSTALL "Install all")"
                 echo
-                printf "${COLOR_GOLD}$(t MSG_ENTER_PACKAGE_NUMBERS_PROMPT) ${COLOR_RESET}"
-                tput setaf 3
-                read -r -e -p "" -i "1 2 5 6 7" PACKAGE_CHOICES
+                read -r -e -p "$(rl_prompt "${COLOR_GOLD}" "$(t MSG_ENTER_PACKAGE_NUMBERS_PROMPT) " "${COLOR_INPUT}")" -i "1 2 5 6 7" PACKAGE_CHOICES
                 tput sgr0
                 tput cuu 26
                 tput ed
@@ -1721,9 +1697,7 @@ install_ai_tools() {
             echo -e "${COLOR_BLUE}3) Amp${COLOR_RESET}"
             echo "4) $ALL_AI_LABEL"
             echo
-            printf "${COLOR_GOLD}$(t MSG_ENTER_AI_TOOLS_NUMBERS_PROMPT "Enter AI tools numbers:") ${COLOR_RESET}"
-            tput setaf 3
-            read -r -e -p "" AI_TOOL_CHOICES
+            read -r -e -p "$(rl_prompt "${COLOR_GOLD}" "$(t MSG_ENTER_AI_TOOLS_NUMBERS_PROMPT "Enter AI tools numbers:" "${COLOR_INPUT}") ")" AI_TOOL_CHOICES
             tput sgr0
             tput cuu 9
             tput ed
@@ -1783,9 +1757,7 @@ install_font() {
             echo -e "${COLOR_BLUE}10) AnonymousPro Nerd Font${COLOR_RESET}"
             echo -e "${COLOR_BLUE}11) Terminus Nerd Font${COLOR_RESET}"
             echo
-            printf "${COLOR_GOLD}$(t MSG_ENTER_FONT_NUMBER) : ${COLOR_RESET}"
-            tput setaf 3
-            read -r -e -p "" -i "1" CHOICE
+            read -r -e -p "$(rl_prompt "${COLOR_GOLD}" "$(t MSG_ENTER_FONT_NUMBER) : " "${COLOR_INPUT}")" -i "1" CHOICE
             tput sgr0
             tput cuu 15
             tput ed
@@ -1836,9 +1808,7 @@ install_desktop() {
                 echo "2) $(t MSG_DESKTOP_LXQT)"
                 echo "3) $(t MSG_DESKTOP_MATE)"
                 echo
-                printf "${COLOR_GOLD}$(t MSG_ENTER_CHOICE_123) : ${COLOR_RESET}"
-                tput setaf 3
-                read -r -e -p "" -i "1" CHOICE
+                read -r -e -p "$(rl_prompt "${COLOR_GOLD}" "$(t MSG_ENTER_CHOICE_123) : " "${COLOR_INPUT}")" -i "1" CHOICE
                 tput sgr0
                 tput cuu 7
                 tput ed
@@ -1883,8 +1853,7 @@ _install_xfce() {
                 return
             fi
         else
-            printf "${COLOR_BLUE}$(t MSG_CONFIRM_INSTALL_XFCE) (O/n) : ${COLOR_RESET}"
-            read -r -e -p "" -i "o" CHOICE
+            read -r -e -p "$(rl_prompt "${COLOR_BLUE}" "$(t MSG_CONFIRM_INSTALL_XFCE) (O/n) : ")" -i "o" CHOICE
             if [[ "$CHOICE" =~ ^[oO]$ ]]; then
                 echo -e "${COLOR_BLUE}$(t MSG_SELECT_XFCE_VERSION)${COLOR_RESET}"
                 echo
@@ -1892,9 +1861,7 @@ _install_xfce() {
                 echo "$(t MSG_XFCE_RECOMMENDED)"
                 echo "$(t MSG_XFCE_CUSTOMIZED)"
                 echo
-                printf "${COLOR_GOLD}$(t MSG_ENTER_CHOICE_123) : ${COLOR_RESET}"
-                tput setaf 3
-                read -r -e -p "" -i "2" CHOICE
+                read -r -e -p "$(rl_prompt "${COLOR_GOLD}" "$(t MSG_ENTER_CHOICE_123) : " "${COLOR_INPUT}")" -i "2" CHOICE
                 tput sgr0
                 tput cuu 7
                 tput ed
@@ -1912,9 +1879,7 @@ _install_xfce() {
                     echo "$(t MSG_BROWSER_FIREFOX)"
                     echo "$(t MSG_BROWSER_NONE)"
                     echo
-                    printf "${COLOR_GOLD}$(t MSG_ENTER_CHOICE_BROWSER) ${COLOR_RESET}"
-                    tput setaf 3
-                    read -r -e -p "" -i "1" CHOICE
+                    read -r -e -p "$(rl_prompt "${COLOR_GOLD}" "$(t MSG_ENTER_CHOICE_BROWSER) " "${COLOR_INPUT}")" -i "1" CHOICE
                     tput sgr0
                     tput cuu 7
                     tput ed
@@ -1965,17 +1930,14 @@ _install_lxqt() {
                 return
             fi
         else
-            printf "${COLOR_BLUE}$(t MSG_CONFIRM_INSTALL_LXQT) (O/n) : ${COLOR_RESET}"
-            read -r -e -p "" -i "o" CHOICE
+            read -r -e -p "$(rl_prompt "${COLOR_BLUE}" "$(t MSG_CONFIRM_INSTALL_LXQT) (O/n) : ")" -i "o" CHOICE
             if [[ "$CHOICE" =~ ^[oO]$ ]]; then
                 echo -e "${COLOR_BLUE}$(t MSG_SELECT_LXQT_VERSION)${COLOR_RESET}"
                 echo
                 echo "$(t MSG_LXQT_MINIMAL)"
                 echo "$(t MSG_LXQT_RECOMMENDED)"
                 echo
-                printf "${COLOR_GOLD}$(t MSG_ENTER_CHOICE_12) : ${COLOR_RESET}"
-                tput setaf 3
-                read -r -e -p "" -i "2" CHOICE
+                read -r -e -p "$(rl_prompt "${COLOR_GOLD}" "$(t MSG_ENTER_CHOICE_12) : " "${COLOR_INPUT}")" -i "2" CHOICE
                 tput sgr0
                 tput cuu 6
                 tput ed
@@ -1992,9 +1954,7 @@ _install_lxqt() {
                     echo "$(t MSG_BROWSER_FIREFOX)"
                     echo "$(t MSG_BROWSER_NONE)"
                     echo
-                    printf "${COLOR_GOLD}$(t MSG_ENTER_CHOICE_BROWSER) ${COLOR_RESET}"
-                    tput setaf 3
-                    read -r -e -p "" -i "1" CHOICE
+                    read -r -e -p "$(rl_prompt "${COLOR_GOLD}" "$(t MSG_ENTER_CHOICE_BROWSER) " "${COLOR_INPUT}")" -i "1" CHOICE
                     tput sgr0
                     tput cuu 7
                     tput ed
@@ -2048,17 +2008,14 @@ _install_mate() {
                 return
             fi
         else
-            printf "${COLOR_BLUE}$(t MSG_CONFIRM_INSTALL_MATE) (O/n) : ${COLOR_RESET}"
-            read -r -e -p "" -i "o" CHOICE
+            read -r -e -p "$(rl_prompt "${COLOR_BLUE}" "$(t MSG_CONFIRM_INSTALL_MATE) (O/n) : ")" -i "o" CHOICE
             if [[ "$CHOICE" =~ ^[oO]$ ]]; then
                 echo -e "${COLOR_BLUE}$(t MSG_SELECT_MATE_VERSION)${COLOR_RESET}"
                 echo
                 echo "$(t MSG_MATE_MINIMAL)"
                 echo "$(t MSG_MATE_RECOMMENDED)"
                 echo
-                printf "${COLOR_GOLD}$(t MSG_ENTER_CHOICE_12) : ${COLOR_RESET}"
-                tput setaf 3
-                read -r -e -p "" -i "2" CHOICE
+                read -r -e -p "$(rl_prompt "${COLOR_GOLD}" "$(t MSG_ENTER_CHOICE_12) : " "${COLOR_INPUT}")" -i "2" CHOICE
                 tput sgr0
                 tput cuu 6
                 tput ed
@@ -2075,9 +2032,7 @@ _install_mate() {
                     echo "$(t MSG_BROWSER_FIREFOX)"
                     echo "$(t MSG_BROWSER_NONE)"
                     echo
-                    printf "${COLOR_GOLD}$(t MSG_ENTER_CHOICE_BROWSER) ${COLOR_RESET}"
-                    tput setaf 3
-                    read -r -e -p "" -i "1" CHOICE
+                    read -r -e -p "$(rl_prompt "${COLOR_GOLD}" "$(t MSG_ENTER_CHOICE_BROWSER) " "${COLOR_INPUT}")" -i "1" CHOICE
                     tput sgr0
                     tput cuu 7
                     tput ed
@@ -2275,8 +2230,7 @@ install_proot() {
                     install_utils
                 fi
             else
-                printf "${COLOR_BLUE}$(t MSG_CONFIRM_INSTALL_PROOT) (O/n) : ${COLOR_RESET}"
-                read -r -e -p "" -i "o" CHOICE
+                read -r -e -p "$(rl_prompt "${COLOR_BLUE}" "$(t MSG_CONFIRM_INSTALL_PROOT) (O/n) : ")" -i "o" CHOICE
                 tput cuu1
                 tput el
                 if [[ "$CHOICE" =~ ^[oO]$ ]]; then
@@ -2408,8 +2362,7 @@ EOL
                 INSTALL_X11=true
             fi
         else
-            printf "${COLOR_BLUE}$(t MSG_CONFIRM_INSTALL_TERMUX_X11) (O/n) : ${COLOR_RESET}"
-            read -r -e -p "" -i "n" choice
+            read -r -e -p "$(rl_prompt "${COLOR_BLUE}" "$(t MSG_CONFIRM_INSTALL_TERMUX_X11) (O/n) : ")" -i "n" choice
             tput cuu1
             tput el
             if [[ "$choice" =~ ^[oO]$ ]]; then
@@ -2577,8 +2530,7 @@ if $USE_GUM; then
         echo -e "${COLOR_BLUE}$(t MSG_OR_RESTART_TERMUX)${COLOR_RESET}"
     fi
 else
-    printf "${COLOR_BLUE}$(t MSG_CONFIRM_EXECUTE_OHMYTERMUX) ${COLOR_RESET}"
-    read -r -e -p "" -i "o" choice
+    read -r -e -p "$(rl_prompt "${COLOR_BLUE}" "$(t MSG_CONFIRM_EXECUTE_OHMYTERMUX) ")" -i "o" choice
     if [[ "$choice" =~ ^[oO]$ ]]; then
         clear
         if [ "$SHELL_CHOICE" = true ]; then
